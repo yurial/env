@@ -23,8 +23,8 @@ autocmd FileType * map <F6> :! make<Enter>
 autocmd FileType * map <F7> :! make clean && make<Enter>
 autocmd FileType * map <F9> :! make run<Enter>
 
-nmap n :cnext<CR>
-nmap p :cprevious<CR>
+nmap + :cnext<CR>
+nmap _ :cprevious<CR>
 
 nmap t :tabedit %<CR>
 nmap = :tabnext<CR>
