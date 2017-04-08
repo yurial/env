@@ -1,0 +1,15 @@
+defshell /bin/bash
+
+defutf8 on
+#defcharset utf8
+##defencoding utf8
+
+#escape ^Xx
+#bind  lockscreen
+
+hardstatus on
+hardstatus alwayslastline
+hardstatus string "%{= g} %{= w}%-w%{=r}%n %t%{-}%+W"
+
+setenv SSH_AUTH_SOCK $HOME/.ssh/agent.sock
+
