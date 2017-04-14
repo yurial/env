@@ -34,5 +34,5 @@ imap <F11> <Esc>:set<Space>nu!<CR>
 nmap <F11> :set<Space>nu!<CR>
 au BufNewFile,BufRead *.inc set filetype=cpp
 au BufRead,BufNewFile ~/sources/* set ts=4 sw=4 expandtab cinoptions=N-2s,fs,{s,^-1s,:0,g0,h0,t0,i2s,c0,/0,(s
-au BufRead,BufNewFile ~/clickhouse/* set ts=4 sw=4 noexpandtab tags=tags,../tags cino=f1s{1s(4
+au BufRead,BufNewFile ~/clickhouse/* set ts=4 sw=4 expandtab tags=tags,../tags cino=f1s{1s(4
 
