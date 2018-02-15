@@ -13,6 +13,7 @@ echo "$SRCDIR/ -> $DSTDIR/"
 rsync -rv "$SRCDIR/" "$DSTDIR/"
 }
 
+ln -s ../../post-checkout .git/hooks/ 2>/dev/null
 case "$1_" in
     "_")
         install;;
