@@ -1,0 +1,26 @@
+[ui]
+username=Iurii Diachenko <yurial@yandex-team.ru>
+editor=vim
+
+[defaults]
+push = -r .
+
+[pull-request]
+publish=True
+require=HANDBRAKE,REVIEW
+
+[extensions]
+purge = 
+pager =
+histedit =
+rebase =
+shelve =
+strip =
+
+[alias]
+irebase = histedit
+reset = strip
+stash = shelve
+
+[pager]
+pager = LESS='FRX' less
