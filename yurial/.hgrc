@@ -4,13 +4,14 @@ editor=vim
 
 [defaults]
 push = -r .
+log = -G
 
 [pull-request]
-publish=True
-require=HANDBRAKE,REVIEW
+publish = True
+require = HANDBRAKE,REVIEW
 
 [extensions]
-purge = 
+purge =
 pager =
 histedit =
 rebase =
@@ -21,6 +22,10 @@ strip =
 irebase = histedit
 reset = strip
 stash = shelve
+tree = --template tree -b .
 
 [pager]
 pager = LESS='FRX' less
+
+[templates]
+tree = '\x1B[38;5;185m{rev}\x1B[38;5;244m:\x1B[38;5;185m{node|short} \x1B[38;5;167m{author|user}@ \x1B[1m\x1B[38;5;252m{desc|firstline}\x1B[0m \x1B[38;5;244m({date|localdate|age}) \x1B[38;5;93m{branches} \x1B[38;5;62m{bookmarks}\x1B[0m\n'
