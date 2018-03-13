@@ -4,7 +4,7 @@ editor=vim
 
 [defaults]
 push = -r .
-log = -G
+log = -b .
 
 [pull-request]
 publish = True
@@ -22,7 +22,7 @@ strip =
 irebase = histedit
 reset = strip
 stash = shelve
-tree = --template tree -b .
+tree = -G . --template tree -b .
 
 [pager]
 pager = LESS='FRX' less
