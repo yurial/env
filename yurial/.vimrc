@@ -16,6 +16,8 @@ set cindent
 set cink=
 set cinw=
 set cinoptions=N-2s,fs,{s,^-1s,:0,g0,h0,t0,i2s,c0,/0,(s
+set listchars=tab:>-,trail:~,extends:>,precedes:<
+set list
 
 highlight Comment ctermfg=Red
 autocmd FileType cpp map <F5> :! g++ %<cr>
