@@ -38,3 +38,7 @@ au BufNewFile,BufRead *.inc set filetype=cpp
 au BufRead,BufNewFile ~/sources/* set ts=4 sw=4 expandtab cinoptions=N-2s,fs,{s,^-1s,:0,g0,h0,t0,i2s,c0,/0,(s
 au BufRead,BufNewFile ~/clickhouse/* set ts=4 sw=4 expandtab tags=tags,../tags cino=f1s{1s(4
 
+" Vim jump to the last position when reopening a file
+if has("autocmd")
+  au BufReadPost * if line("'\"") > 1 && line("'\"") <= line("$") | exe "normal! g'\"" | endif
+endif
