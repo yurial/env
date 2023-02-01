@@ -23,5 +23,6 @@ EDITOR=vim
 PATH="~/.bin:/usr/sbin:/sbin:$PATH"
 
 alias agrep="grep --colour=auto --colour=auto --exclude-dir=.git --exclude-dir=deps --exclude-dir=build --exclude-dir=new_reports -Rn"
+alias cstyle="ya tool clang-format -style=file -i"
 
 # Put your fun stuff here.
