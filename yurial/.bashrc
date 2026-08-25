@@ -15,14 +15,25 @@ if [[ $- != *i* ]] ; then
 fi
 
 source /etc/profile
+source /etc/skel/.bashrc
+source "$HOME/.cargo/env"
+source ~/.secret
 
+shopt -s checkwinsize
+
+HISTCONTROL=ignoreboth
 HISTSIZE=1000000
-HISTFILESIZE=1000000
+HISTFILESIZE=10000000
 
 EDITOR=vim
-PATH="~/.bin:/usr/sbin:/sbin:$PATH"
+PATH="~/.bin:~/.local/bin:~/.opencode/bin:~/.bun/bin:/usr/sbin:/sbin:$PATH"
 
 alias agrep="grep --colour=auto --colour=auto --exclude-dir=.git --exclude-dir=deps --exclude-dir=build --exclude-dir=new_reports -Rn"
+alias mcc="mcc_local -l"
+alias ya="~/flowruntime/ya"
 alias cstyle="ya tool clang-format -style=file -i"
 
+pretty() {
+    echo "$1" | sed 's/\\n/\n/g'
+}
 # Put your fun stuff here.
