@@ -1,0 +1,122 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "share": "disabled",
+  "default_agent": "main",
+  "model": "vk-zai-personal/flash",
+  "small_model": "vk-zai-personal/flash",
+  "provider": {
+    "vk-zai-personal": {
+      "options": {
+        "baseURL": "{env:AI_BASE_URL}",
+        "apiKey": "{env:AI_TOKEN_ZAI_WORK}",
+        "headers": {
+          "X-Proxy-Token": "{env:AI_TOKEN_VK}"
+        },
+        "headerTimeout": 120000,
+        "chunkTimeout": 120000,
+        "retries": 1000000
+      },
+      "models": {
+        "heavy": {
+          "id": "glm-5.3",
+          "limit": {
+            "context": 1000000,
+            "output": 128000
+          },
+          "name": "heavy",
+          "reasoning": true,
+          "variants": {
+            "low": { "reasoningEffort": "low" },
+            "high": { "reasoningEffort": "high" },
+            "max": { "reasoningEffort": "max" }
+          },
+          "primeTimeStart": "14:00+08:00",
+          "primeTimeEnd": "18:00+08:00",
+          "primeTimeDay": ["mon", "tue", "wed", "thu", "fri"],
+          "primeTimeRetry": true
+        },
+        "flash": {
+          "id": "glm-5.3-flash",
+          "limit": {
+            "context": 1000000,
+            "output": 128000
+          },
+          "name": "flash",
+          "reasoning": true,
+          "attachment": true,
+          "modalities": {
+            "input": ["text", "image", "video", "pdf"],
+            "output": ["text"]
+          },
+          "variants": {
+            "low": { "reasoningEffort": "low" },
+            "high": { "reasoningEffort": "high" },
+            "max": { "reasoningEffort": "max" }
+          },
+          "primeTimeStart": "14:00+08:00",
+          "primeTimeEnd": "18:00+08:00",
+          "primeTimeDay": ["mon", "tue", "wed", "thu", "fri"],
+          "primeTimeRetry": true
+        },
+        "cheap": {
+          "id": "glm-4.6v",
+          "limit": {
+            "context": 100000,
+            "output": 128000
+          },
+          "name": "cheap",
+          "attachment": true,
+          "modalities": {
+            "input": ["text", "image"],
+            "output": ["text"]
+          },
+          "primeTimeStart": "14:00+08:00",
+          "primeTimeEnd": "18:00+08:00",
+          "primeTimeDay": ["mon", "tue", "wed", "thu", "fri"],
+          "primeTimeRetry": true
+        }
+      }
+    }
+  },
+  "disabled_providers": [
+    "alibaba",
+    "amazon-bedrock",
+    "anthropic",
+    "azure",
+    "azure-cognitive-services",
+    "cerebras",
+    "cloudflare-ai-gateway",
+    "cloudflare-workers-ai",
+    "cohere",
+    "deepinfra",
+    "gemini",
+    "github-copilot",
+    "gitlab",
+    "google",
+    "google-vertex",
+    "google-vertex-anthropic",
+    "groq",
+    "kilo",
+    "llmgateway",
+    "mistral",
+    "nvidia",
+    "openai",
+    "openai-compatible",
+    "opencode",
+    "openrouter",
+    "perplexity",
+    "sap-ai-core",
+    "snowflake-cortex",
+    "togetherai",
+    "venice",
+    "vercel",
+    "xai",
+    "zenmux"
+  ],
+  "permission": {
+    "bash": {
+      "*": "allow",
+      "sleep*": "deny"
+    }
+  }
+}

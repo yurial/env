@@ -26,7 +26,7 @@ HISTSIZE=1000000
 HISTFILESIZE=10000000
 
 EDITOR=vim
-PATH="~/.bin:~/.local/bin:~/.opencode/bin:~/.bun/bin:/usr/sbin:/sbin:$PATH"
+PATH="$HOME/.bin:$HOME/.local/bin:$HOME/.opencode/bin:$HOME/.bun/bin:/usr/sbin:/sbin:$PATH"
 
 alias agrep="grep --colour=auto --colour=auto --exclude-dir=.git --exclude-dir=deps --exclude-dir=build --exclude-dir=new_reports -Rn"
 alias mcc="mcc_local -l"
