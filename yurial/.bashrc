@@ -32,6 +32,7 @@ alias agrep="grep --colour=auto --colour=auto --exclude-dir=.git --exclude-dir=d
 alias mcc="mcc_local -l"
 alias ya="~/flowruntime/ya"
 alias cstyle="ya tool clang-format -style=file -i"
+alias opencode-direct="AI_BASE_URL='https://api.z.ai/api/coding/paas/v4' AI_TOKEN_VK='' opencode"
 
 pretty() {
     echo "$1" | sed 's/\\n/\n/g'
