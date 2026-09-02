@@ -28,7 +28,8 @@
           "variants": {
             "low": { "reasoningEffort": "low" },
             "high": { "reasoningEffort": "high" },
-            "max": { "reasoningEffort": "max" }
+            "max": { "reasoningEffort": "max" },
+            "stupid": { "thinking": { "type": "disabled" } }
           },
           "primeTimeStart": "14:00+08:00",
           "primeTimeEnd": "18:00+08:00",
@@ -51,7 +52,8 @@
           "variants": {
             "low": { "reasoningEffort": "low" },
             "high": { "reasoningEffort": "high" },
-            "max": { "reasoningEffort": "max" }
+            "max": { "reasoningEffort": "max" },
+            "stupid": { "thinking": { "type": "disabled" } }
           },
           "primeTimeStart": "14:00+08:00",
           "primeTimeEnd": "18:00+08:00",

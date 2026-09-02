@@ -25,10 +25,11 @@
 
 Конфигурация живёт в `yurial/.config/opencode/`:
 
-- `opencode.json` — единственный провайдер `vk-zai-personal` (модели `heavy`=glm-5.3, `flash`=glm-5.3-flash, `cheap`=glm-4.6v; у `heavy` и `flash` варианты reasoning `low`/`high`/`max`). Все прочие встроенные провайдеры (openai, gemini, openrouter, opencode, anthropic и т.д.) отключены через `disabled_providers`. `default_agent: main`. Bash-команды разрешены все, кроме `sleep*`. Телеметрия/шаринг глобально отключены (`"share": "disabled"`).
+- `opencode.json` — единственный провайдер `vk-zai-personal` (модели `heavy`=glm-5.3, `flash`=glm-5.3-flash, `cheap`=glm-4.6v; у `heavy` и `flash` варианты reasoning `low`/`high`/`max` и вариант `stupid` с полностью выключенным thinking `"thinking":{"type":"disabled"}`). Все прочие встроенные провайдеры (openai, gemini, openrouter, opencode, anthropic и т.д.) отключены через `disabled_providers`. `default_agent: main`. Bash-команды разрешены все, кроме `sleep*`. Телеметрия/шаринг глобально отключены (`"share": "disabled"`).
 - `agents/` — определения агентов (тело промпта каждого — в `rules/`):
   - `main` — primary-агент, диспетчер на flash-модели с reasoning `low`: ведёт диалог с пользователем, формирует самодостаточные задания и запускает субагентов по `rules/delegation.md`; сам — только работа с контекстом диалога, тривиальная одношаговая механика и ведение issue.md/TODO.md.
   - `assistant_low` / `assistant_high` / `assistant_max` — исполнители на flash-модели (glm-5.3-flash) с reasoning-вариантами low/high/max соответственно (суффикс = вариант reasoning): low — последовательности с простыми ветвлениями; high — стандартные подзадачи; max — сложные и safety-critical задачи, ревью и правки spec/skills/rules и TLA-спек.
+  - `assistant_stupid` — исполнитель на flash-модели с вариантом `stupid` (thinking полностью выключен): самый быстрый и дешёвый flash-исполнитель для тривиально предсказуемой работы того же scope, что и low.
   - `assistant_cheap` — одиночные команды и механика на `vk-zai-personal/cheap` (glm-4.6v). «Стоимость» — это маппинг правил делегирования, а не разные модели. Все исполнители сами субагентов не запускают (`task: deny`).
   - `assistant_heavy` — эскалационный исполнитель на модели `vk-zai-personal/heavy` (glm-5.3, reasoning max): подключается, когда flash-исполнители не справляются — очень сложный дебаг, поиск неуловимых ошибок, супер-сложные design-задачи.
   - `build`, `explorer`, `general`, `plan`, `scout` — отключены (`disable: true`).
@@ -40,7 +41,7 @@
 ```
 user → main (primary, диспетчер, flash + reasoning low)
           ├─ диалог, уточнения, формирование заданий → сам
-          └─ содержательная работа (delegation.md) ──→ assistant_cheap / assistant_low / assistant_high / assistant_max / assistant_heavy
+           └─ содержательная работа (delegation.md) ──→ assistant_cheap / assistant_stupid / assistant_low / assistant_high / assistant_max / assistant_heavy
                                                        (правки spec/skills/rules и TLA-спек — assistant_max; эскалация за потолок flash — assistant_heavy)
 ```
 
