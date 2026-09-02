@@ -27,12 +27,13 @@ HISTFILESIZE=10000000
 
 EDITOR=vim
 PATH="$HOME/.bin:$HOME/.local/bin:$HOME/.opencode/bin:$HOME/.bun/bin:/usr/sbin:/sbin:$PATH"
+ZAI_ORIGINAL_URL='https://api.z.ai/api/coding/paas/v4'
 
 alias agrep="grep --colour=auto --colour=auto --exclude-dir=.git --exclude-dir=deps --exclude-dir=build --exclude-dir=new_reports -Rn"
 alias mcc="mcc_local -l"
 alias ya="~/flowruntime/ya"
 alias cstyle="ya tool clang-format -style=file -i"
-alias opencode-direct="AI_BASE_URL='https://api.z.ai/api/coding/paas/v4' AI_TOKEN_VK='' opencode"
+alias opencode-direct="AI_BASE_URL=$ZAI_ORIGINAL_URL AI_TOKEN_VK= opencode"
 
 pretty() {
     echo "$1" | sed 's/\\n/\n/g'
