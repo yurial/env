@@ -1,8 +1,8 @@
 ---
 color: "#00FF00"
-description: "Cheap flash executor with thinking disabled: same scope as assistant_low (simple, well-specified tasks: single-file edits by exact instruction, small scripts, formatting, searching with given patterns, mechanical refactors) but without reasoning — fastest and cheapest flash option for trivially predictable work; not for design or debugging."
+description: "Cheapest executor with thinking disabled (variant stupid on glm-4.6v): same scope as assistant_cheap (single-file edits by exact instruction, small scripts, formatting, searching with given patterns, mechanical refactors) but without reasoning — for trivially predictable work; not for design or debugging."
 mode: subagent
-model: vk-zai-personal/flash
+model: vk-zai-personal/cheap
 variant: stupid
 permission:
   "*": allow

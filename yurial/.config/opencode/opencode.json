@@ -28,8 +28,7 @@
           "variants": {
             "low": { "reasoningEffort": "low" },
             "high": { "reasoningEffort": "high" },
-            "max": { "reasoningEffort": "max" },
-            "stupid": { "thinking": { "type": "disabled" } }
+            "max": { "reasoningEffort": "max" }
           },
           "primeTimeStart": "14:00+08:00",
           "primeTimeEnd": "18:00+08:00",
@@ -52,8 +51,7 @@
           "variants": {
             "low": { "reasoningEffort": "low" },
             "high": { "reasoningEffort": "high" },
-            "max": { "reasoningEffort": "max" },
-            "stupid": { "thinking": { "type": "disabled" } }
+            "max": { "reasoningEffort": "max" }
           },
           "primeTimeStart": "14:00+08:00",
           "primeTimeEnd": "18:00+08:00",
@@ -68,6 +66,9 @@
           },
           "name": "cheap",
           "attachment": true,
+          "variants": {
+            "stupid": { "thinking": { "type": "disabled" } }
+          },
           "modalities": {
             "input": ["text", "image"],
             "output": ["text"]
