@@ -67,7 +67,8 @@
           "name": "cheap",
           "attachment": true,
           "variants": {
-            "stupid": { "thinking": { "type": "disabled" } }
+            "stupid": { "thinking": { "type": "disabled" } },
+            "smart": { "thinking": { "type": "enabled" } }
           },
           "modalities": {
             "input": ["text", "image"],
