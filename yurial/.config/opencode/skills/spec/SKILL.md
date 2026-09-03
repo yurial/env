@@ -114,8 +114,8 @@ Rules:
 - No `deprecated` status: superseded specs (or their obsolete parts) are
   DELETED or rewritten in place under the new requirements — never kept for
   reference. The index row is removed in the same commit; if a successor spec
-  exists, the old path is not kept as a stub. History lives in git and in
-  DEVIATIONS.md (section 6), not in living spec files.
+  exists, the old path is not kept as a stub. History lives in git, not in
+  living spec files.
 - `Summary`: one line, nouns only — what is fixed, not how.
 - `Reference` is the stable ID other specs cite instead of file paths (section
   4 writing rules) and the mandatory prefix of every term ID (section 3a). It
@@ -324,7 +324,8 @@ Writing rules:
   whatever the spec's language is.
 - The spec states the CURRENT requirements only: when requirements change,
   rewrite or delete the obsolete statements — no strikethrough archives inside
-  spec files (behavior deltas belong in DEVIATIONS.md, section 6).
+  spec files. DEVIATIONS.md (section 6) records only the resulting code-vs-spec
+  divergence, never the change itself.
 - **Verification entries (template section above)**: a spec section that
   describes algorithms gets a `Verification` section when any of them is
   checked with a formal tool. Rules:
@@ -389,18 +390,21 @@ statements look intentional — that is a design conflict, not a typo.
 
 ## 6. DEVIATIONS.md: the change ledger
 
-Every spec modification that changes BEHAVIOR (not typos, formatting, or pure
-wording) is recorded in `DEVIATIONS.md` (root, small projects) or
-`specs/DEVIATIONS.md` (projects with a specs/ tree). Purpose: after the spec
-changes, this file answers "what code must be reworked, and what should a
-reviewer of that code check". A behavior-changing spec edit without a
-DEVIATIONS.md entry is incomplete — same commit.
+Changes to target behavior are always made in the specification itself,
+immediately, in the same commit as the change. A behavior-changing spec edit
+opens a divergence between the updated spec (the new source of truth) and the
+code, which must now catch up — and ONLY that divergence is recorded in
+`DEVIATIONS.md` (root, small projects) or `specs/DEVIATIONS.md` (projects with
+a specs/ tree). Purpose: after the spec changes, this file answers "what code
+must be reworked, and what should a reviewer of that code check". A
+behavior-changing spec edit without a DEVIATIONS.md entry is incomplete —
+same commit.
 
 Entry format (append at the end; newest last):
 
 ```markdown
 ## D-007 2026-08-25 specs/queue.md
-Change: R3 delivery retries changed from fixed 3 attempts to exponential
+Spec change: R3 delivery retries changed from fixed 3 attempts to exponential
   backoff, unbounded until ack or lease expiry.
 Was: max 3 retries, then dead-letter.
 Now: retry with 1s doubling backoff while message lease is held.
@@ -413,11 +417,13 @@ Review focus: unbounded retry cannot outlive the lease; dead-letter is emitted
 ```
 
 Rules:
-- One entry per behavior change, stable ID (D-1, D-2, ...; never renumber).
-  Cite the spec requirement IDs it touches (R3 above).
+- One entry per behavior-changing spec edit (one open divergence), stable ID
+  (D-1, D-2, ...; never renumber). Cite the spec requirement IDs it touches
+  (R3 above).
 - `Code impact` names the places to rework — files/modules are allowed HERE
   (unlike the spec itself), because this ledger exists to drive code changes.
-- `Was`/`Now` states observable behavior, not implementation.
+- `Was` (what the code still does) / `Now` (what the updated spec prescribes)
+  state observable behavior, not implementation.
 - `Review focus` lists what a code reviewer must verify for compliance with
   the NEW spec — the checks that would not exist without this change.
 - Entries are never edited after the fact; corrections get a new entry
@@ -455,9 +461,10 @@ Rules:
 - Colocated `<library>/<component>/SPEC.md` missing from the index.
 - Index rows for deleted/moved files; stale Status values.
 - Keeping superseded/obsolete specs or spec parts "for reference" — delete or
-  rewrite them (section 3); history lives in git and DEVIATIONS.md.
+  rewrite them (section 3); history lives in git.
 - Strikethrough archives or change logs inside spec files — the spec states
-  current requirements only; behavior deltas go to DEVIATIONS.md.
+  current requirements only; behavior changes land in the spec itself, the
+  divergences they open go to DEVIATIONS.md.
 - Behavior-changing spec edit without a DEVIATIONS.md entry.
 - DEVIATIONS.md as an archive: entries surviving after the code conforms
   (section 6 lifecycle) defeat its purpose as a worklist.

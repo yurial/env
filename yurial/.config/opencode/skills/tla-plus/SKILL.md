@@ -114,7 +114,9 @@ iterations** of `assistant_cheap` before escalating.
    - Review the current spec and TLC output
    - Apply targeted fixes based on deep reasoning about the error class
    - Re-run TLC to verify the fix
-   - Document the fix in the spec header or DEVIATIONS.md if it changes behavior
+   - Document the fix in the spec header; if it changes behavior, the change
+     goes into the governing project spec immediately, with only the resulting
+     code-vs-spec divergence recorded in DEVIATIONS.md (spec skill, section 6)
 
 4. **Cleanup.** After the spec is green and verified, remove or archive the draft
    file (see spec skill section 1b for archive strategy). The draft is not part of
