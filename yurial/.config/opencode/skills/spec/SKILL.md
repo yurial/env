@@ -479,7 +479,9 @@ Rules:
 - Strikethrough archives or change logs inside spec files — the spec states
   current requirements only; behavior changes land in the spec itself, the
   divergences they open go to DEVIATIONS.md.
-- Behavior-changing spec edit without a DEVIATIONS.md entry.
+- Behavior-changing spec edit without a DEVIATIONS.md entry — unless the
+  conforming code lands in that same commit (no divergence, no entry;
+  section 6).
 - DEVIATIONS.md as an archive or changelog: entries surviving after the code
   conforms (section 6 lifecycle), or reading `Was`/`Now` as "what was and what
   became" history — an entry states an OPEN divergence and must not exist once
