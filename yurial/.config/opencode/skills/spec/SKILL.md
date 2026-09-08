@@ -400,6 +400,14 @@ must be reworked, and what should a reviewer of that code check". A
 behavior-changing spec edit without a DEVIATIONS.md entry is incomplete —
 same commit.
 
+**An entry is an open divergence, not a history record.** A DEVIATIONS.md entry
+exists only while the code↔spec divergence it describes is open: the mere
+existence of an entry asserts "this code does not yet match the spec". `Was`/`Now`
+state the current state of that divergence — left: what the code still does,
+right: what the updated spec prescribes — not a past event. No open divergence,
+no entry. DEVIATIONS.md is not a changelog or a history of spec changes
+(history lives in git).
+
 Entry format (append at the end; newest last):
 
 ```markdown
@@ -423,7 +431,9 @@ Rules:
 - `Code impact` names the places to rework — files/modules are allowed HERE
   (unlike the spec itself), because this ledger exists to drive code changes.
 - `Was` (what the code still does) / `Now` (what the updated spec prescribes)
-  state observable behavior, not implementation.
+  state observable behavior, not implementation. This pair describes the
+  CURRENT open divergence — not "what was and what became" over time — and is
+  deleted together with the entry once the code conforms (lifecycle below).
 - `Review focus` lists what a code reviewer must verify for compliance with
   the NEW spec — the checks that would not exist without this change.
 - Entries are never edited after the fact; corrections get a new entry
@@ -431,8 +441,10 @@ Rules:
 - **Entry lifecycle ends with conformance**: once the code matches the new spec
   (implementation landed, tests updated and green), the entry is DELETED from
   DEVIATIONS.md — in the same commit as the conforming code change, not later.
-  DEVIATIONS.md contains only open code-vs-spec divergences; it is a live
-  worklist, never an archive of applied changes (that history lives in git).
+  Conformance check: if the current spec and the code agree, the entry must not
+  exist; an entry discovered in that state is deleted immediately. DEVIATIONS.md
+  contains only open code-vs-spec divergences; it is a live worklist, never an
+  archive of applied changes (that history lives in git).
 - Small projects may start with DEVIATIONS.md in the root even before any
   specs/ tree exists.
 
@@ -466,8 +478,10 @@ Rules:
   current requirements only; behavior changes land in the spec itself, the
   divergences they open go to DEVIATIONS.md.
 - Behavior-changing spec edit without a DEVIATIONS.md entry.
-- DEVIATIONS.md as an archive: entries surviving after the code conforms
-  (section 6 lifecycle) defeat its purpose as a worklist.
+- DEVIATIONS.md as an archive or changelog: entries surviving after the code
+  conforms (section 6 lifecycle), or reading `Was`/`Now` as "what was and what
+  became" history — an entry states an OPEN divergence and must not exist once
+  spec and code agree.
 - Renumbering requirements (breaks external references) — retire IDs instead.
 - Citing another spec by file path instead of its index reference ID — the
   reference breaks on the first file move (section 4 writing rules).
