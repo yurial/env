@@ -388,7 +388,7 @@ Resolution: fix the related spec when the fix is mechanical (renames,
 reference updates, counterpart mentions). Stop and ask the user when both
 statements look intentional — that is a design conflict, not a typo.
 
-## 6. DEVIATIONS.md: the change ledger
+## 6. DEVIATIONS.md: the open-divergence worklist
 
 Changes to target behavior are always made in the specification itself,
 immediately, in the same commit as the change. A behavior-changing spec edit
@@ -398,22 +398,23 @@ code, which must now catch up — and ONLY that divergence is recorded in
 a specs/ tree). Purpose: after the spec changes, this file answers "what code
 must be reworked, and what should a reviewer of that code check". A
 behavior-changing spec edit without a DEVIATIONS.md entry is incomplete —
-same commit.
+unless the conforming code lands in that same commit.
 
 **An entry is an open divergence, not a history record.** A DEVIATIONS.md entry
 exists only while the code↔spec divergence it describes is open: the mere
 existence of an entry asserts "this code does not yet match the spec". `Was`/`Now`
-state the current state of that divergence — left: what the code still does,
+describe the current state of that divergence — left: what the code still does,
 right: what the updated spec prescribes — not a past event. No open divergence,
 no entry. DEVIATIONS.md is not a changelog or a history of spec changes
-(history lives in git).
+(history lives in git). If the conforming code lands in the same commit as
+the spec edit, no divergence is ever open and no entry is created.
 
 Entry format (append at the end; newest last):
 
 ```markdown
 ## D-007 2026-08-25 specs/queue.md
-Spec change: R3 delivery retries changed from fixed 3 attempts to exponential
-  backoff, unbounded until ack or lease expiry.
+Spec edit: R3 (delivery retries) rewritten — exponential backoff, unbounded
+  until ack or lease expiry.
 Was: max 3 retries, then dead-letter.
 Now: retry with 1s doubling backoff while message lease is held.
 Code impact: retry loop in queue/worker.go must drop the attempt counter and
@@ -429,7 +430,7 @@ Rules:
   (D-1, D-2, ...; never renumber). Cite the spec requirement IDs it touches
   (R3 above).
 - `Code impact` names the places to rework — files/modules are allowed HERE
-  (unlike the spec itself), because this ledger exists to drive code changes.
+  (unlike the spec itself), because this worklist exists to drive code changes.
 - `Was` (what the code still does) / `Now` (what the updated spec prescribes)
   state observable behavior, not implementation. This pair describes the
   CURRENT open divergence — not "what was and what became" over time — and is
@@ -437,7 +438,8 @@ Rules:
 - `Review focus` lists what a code reviewer must verify for compliance with
   the NEW spec — the checks that would not exist without this change.
 - Entries are never edited after the fact; corrections get a new entry
-  referencing the old one.
+  referencing the old one; the superseded entry is deleted in that same
+  commit (the reference resolves via git history).
 - **Entry lifecycle ends with conformance**: once the code matches the new spec
   (implementation landed, tests updated and green), the entry is DELETED from
   DEVIATIONS.md — in the same commit as the conforming code change, not later.
