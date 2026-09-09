@@ -9,6 +9,12 @@ permission:
   bash:
     "*": allow
     "sleep*": deny
-  task: deny
+  task:
+    "*": deny
+    assistant_stupid: allow
+    assistant_cheap: allow
+    assistant_low: allow
+    assistant_high: allow
+    assistant_max: allow
 prompt: "{file:./rules/assistant.md}"
 ---

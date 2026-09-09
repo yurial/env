@@ -49,8 +49,8 @@ two-step agent delegation workflow:
    of the final commit and is not committed to the repository until explicitly
    approved.
 
-2. **Generate with assistant_max.** Once the research draft is ready, use the
-   `assistant_max` agent (on vk-zai-personal/flash with reasoningEffort max) to
+2. **Generate with assistant_heavy.** Once the research draft is ready, use the
+   `assistant_heavy` agent (on vk-zai-personal/heavy with reasoningEffort max) to
    author or update the specification according to the templates and writing
    rules in sections 3-4. The draft file serves as the source of truth for
    references and gaps; the spec generation should cite specific requirement
@@ -67,7 +67,7 @@ two-step agent delegation workflow:
 
 This workflow ensures that the authoring process leverages the research
 capabilities of assistant_cheap (cheap, read-only, reasoning-heavy) before
-moving to the high-effort spec writing with assistant_max, keeping the draft
+moving to the high-effort spec writing with assistant_heavy, keeping the draft
 ephemeral and easily deletable.
 
 ## 2. Layout by project size

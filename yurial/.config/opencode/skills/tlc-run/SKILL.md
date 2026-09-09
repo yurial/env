@@ -1,6 +1,6 @@
 ---
 name: tlc-run
-description: Use when asked to run TLC, model-check a TLA+ spec, execute a tlc.cfg/tlc.live.cfg model, or interpret TLC output (violations, deadlocks, parse errors, coverage). Also the execution backend for tla-plus workflow steps that say "run TLC". Covers commands, flags, result classification, and the delegation protocol for running TLC via a cheap background subagent. Use ONLY for running TLC, not for writing specs (tla-plus) or proofs (tlaps).
+description: Use when asked to run TLC, model-check a TLA+ spec, execute a tlc.cfg/tlc.live.cfg model, or interpret TLC output (violations, deadlocks, parse errors, coverage). Also the execution backend for tla-plus workflow steps that say "run TLC". Covers commands, flags, result classification, and the delegation protocol for running TLC via the assistant_stupid background subagent. Use ONLY for running TLC, not for writing specs (tla-plus) or proofs (tlaps).
 ---
 
 # Running TLC: commands, result classification, delegation
@@ -97,14 +97,19 @@ there); the runner classifies and reports, the caller decides the fix.
 Coverage gate note: when reporting a green safety run, include the coverage
 counts — an action with zero fires is itself a finding (tla-plus 6.3).
 
-## 3. Delegation protocol (run TLC via a cheap background agent)
+## 3. Delegation protocol (run TLC via assistant_stupid)
 
-TLC runs are minutes-long, mechanical, and independent — delegate them to the
-most cost-efficient agent available (the cheapest, least capable agent that
-can still run a given bash command and copy output verbatim; pick by the
-agents' cost/capability descriptions, not by habit) and continue other work
-while it runs. The qualification bar is low: bash execution + verbatim
-copying, nothing else.
+TLC runs are minutes-long, mechanical, and independent — delegate them to
+`assistant_stupid` (the cheapest, least capable agent that can still run a
+given bash command and copy output verbatim) and continue other work while it
+runs. The qualification bar is low: bash execution + verbatim copying,
+nothing else. The caller is whoever leads the loop: the workflow driver
+(main) directly, or an executor subdelegating strictly down the ladder —
+typically assistant_heavy inside the tla-plus iteration cycle (the
+heavy↔stupid loop is led by heavy). If the runner stalls without a result,
+resume its session (by task_id) and send it `continue`; repeat on every
+resultless finish, up to 10 times, then stop and ask the user for
+instructions (pass the task_id and the task essence).
 
 The instruction to the runner agent MUST be self-contained (the dumb agent
 knows nothing about the project) and include, verbatim:

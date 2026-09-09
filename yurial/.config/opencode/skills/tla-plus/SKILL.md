@@ -46,8 +46,10 @@ section 9 (TLAPS) instead of, or before, this loop.
    first (check it standalone), then the internal module.
 4. **Create a model with the smallest sensible bounds** (typically 2–3 nodes,
    1–2 in-flight messages; constants are assigned in the cfg, section 6.1). Run TLC
-   (execution via the tlc-run skill — direct or delegated) checking *safety only*
-   (TypeOK + invariants + deadlock). Fix until clean.
+    (execution via the tlc-run skill — delegated to assistant_stupid by whoever
+    leads the loop: the workflow driver directly, or assistant_heavy via
+    subdelegation; see section 1b) checking
+    *safety only* (TypeOK + invariants + deadlock). Fix until clean.
 5. **Coverage gate (hard stop).** Rerun the safety model with `-coverage 1` and
    verify every action fired. A never-fired action is a bug, an over-small model,
    or dead code — resolve it before moving on. This gate blocks every later
@@ -72,9 +74,9 @@ section 9 (TLAPS) instead of, or before, this loop.
    level of this spec (section 2) and what it abstracts away, what was checked
    (invariants/liveness, bounds), and the explicit Not-checked list.
 
-## 1b. Agent-based workflow (assistant_cheap → assistant_max)
+## 1b. Agent-based workflow (research via assistant_cheap; authoring by assistant_heavy; TLC loop heavy → assistant_stupid)
 
-When authoring a TLA+ spec with the `tla-plus` skill, follow this two-agent delegation workflow:
+When authoring a TLA+ spec with the `tla-plus` skill, follow this delegation workflow:
 
 1. **Research with assistant_cheap.** Use the `assistant_cheap` researcher agent to read
    the relevant spec files, examples, and documentation. The agent should save
@@ -91,29 +93,35 @@ When authoring a TLA+ spec with the `tla-plus` skill, follow this two-agent dele
    the final commit and is not committed to the repository until explicitly
    approved.
 
-2. **Generate with assistant_cheap, iterate with TLC.** Once the research draft is
-   ready, use `assistant_cheap` to author or update the TLA+ spec module according
-   to the template (section 3) and writing rules (sections 4-7). After each
-   iteration:
-   - Run TLC on the safety model (via tlc-run skill) checking TypeOK, invariants,
-     and deadlock.
-   - Review the TLC output for errors, counterexamples, or coverage gaps.
-   - Fix errors in the spec based on TLC findings.
-   - Repeat until the safety model is green and the coverage gate passes
+2. **Generate with assistant_heavy, iterate with TLC.** Once the research draft is
+   ready, use `assistant_heavy` (on vk-zai-personal/heavy with reasoningEffort
+   max) to author or update the TLA+ spec module and its cfg models according
+   to the template (section 3) and writing rules (sections 4-7). The
+   heavy↔stupid iteration loop is led by assistant_heavy itself: subagents can
+   be launched only strictly down the ladder, and assistant_stupid is below
+   assistant_heavy, so heavy subdelegates every TLC run to `assistant_stupid`
+   itself (tlc-run skill, section 3 there) — no round-trips through the
+   driver. After each edit assistant_heavy:
+   - Runs TLC on the safety model (via the tlc-run skill, subdelegated to
+     assistant_stupid) checking TypeOK, invariants, and deadlock.
+   - Reviews the verbatim TLC report from assistant_stupid for errors,
+     counterexamples, or coverage gaps.
+   - Fixes errors in the spec based on TLC findings.
+   - Repeats until the safety model is green and the coverage gate passes
      (section 6.3).
 
 This cycle (spec generation → TLC run → fix) should be repeated up to **3
-iterations** of `assistant_cheap` before escalating.
+iterations** before the deep-fix pass (step 3).
 
-3. **Escalate to assistant_max if necessary.** If after 3 complete TLC runs
+3. **Deep-fix pass by assistant_heavy.** If after 3 complete TLC runs
    (i.e., after 3 spec iterations) the same or similar errors persist, or the
    spec requires high-effort reasoning (complex liveness, tricky refinements,
-   intricate invariant design), switch to using `assistant_max` (on
-   vk-zai-personal/flash with reasoningEffort max) to fix the PLA file.
-   Assistant_max should:
-   - Review the current spec and TLC output
+   intricate invariant design), assistant_heavy stops mere iterating and fixes
+   the spec from assistant_stupid's verbatim TLC report with full effort.
+   Assistant_heavy should:
+   - Review the current spec and the TLC report
    - Apply targeted fixes based on deep reasoning about the error class
-   - Re-run TLC to verify the fix
+   - Re-run TLC via assistant_stupid to verify the fix
    - Document the fix in the spec header; if it changes behavior, the change
      goes into the governing project spec immediately, with only the resulting
      code-vs-spec divergence recorded in DEVIATIONS.md (spec skill, section 6)
@@ -122,9 +130,11 @@ iterations** of `assistant_cheap` before escalating.
    file (see spec skill section 1b for archive strategy). The draft is not part of
    the final commit and should be cleaned up to keep the repository clean.
 
-This workflow ensures that simple and mechanical spec authoring tasks leverage the
-cheap, fast assistant_cheap, while complex or recalcitrant bugs escalate to the
-high-effort assistant_max, keeping iterations efficient and the draft ephemeral.
+This workflow ensures that research leverages the cheap, fast assistant_cheap,
+spec authoring and fixes stay with the high-effort assistant_heavy, and
+mechanical TLC runs are subdelegated to assistant_stupid by assistant_heavy
+itself (the heavy↔stupid cycle is led by heavy, keeping iterations tight),
+keeping the draft ephemeral.
 
 ## 2. Abstraction levels for a large system
 
@@ -560,9 +570,12 @@ Ladder (try in this order, one at a time, rerun after each):
 Invocation mechanics live in the `tlc-run` skill: exact commands and flags,
 cfg naming recap (tlc.cfg / <component>.tlc.cfg / variant names are defined
 in section 6.1 there), result classification table (green vs violation
-classes), exit codes, and the delegation protocol for launching runs via a
-cheap background subagent (instruction template: workdir, command, what is
-checked, expected output, report format, boundaries).
+classes), exit codes, and the delegation protocol for launching runs via the
+assistant_stupid background subagent (instruction template: workdir, command,
+what is checked, expected output, report format, boundaries). The caller is
+whoever leads the loop: the workflow driver directly, or a higher executor
+subdelegating strictly down the ladder — typically assistant_heavy inside the
+section 1b iteration cycle.
 
 Still governed here (methodology): the workflow (section 1) — safety before
 liveness, the coverage gate before stage transitions (section 6.3 below),
