@@ -11,6 +11,8 @@
   - vcs: `.gitconfig`, `.hgrc`
   - ssh: `.ssh/config`, `.ssh/rc`, `.ssh/authorized_keys`
   - opencode: `.config/opencode/` (см. ниже)
+  - `bin/ansi-table.sh` — печатает матрицу 16x16 сочетаний ANSI фон/текст (подбор пар для темы)
+- `yurial/.config/opencode/themes/yurial.json` — кастомная тема TUI opencode (16 ANSI-цветов, уникальные контрастные пары фон/текст; выбор в `/themes`). Тема рассчитана на 256-цветной режим (`TERM=screen-256color`); alias `opencode` в `.bashrc` обходит баг opentui 0.4.5 (remote-детект по `SSH_*` отключает 256-цветность).
 - `iu.diachenko` — симлинк на `yurial/`: `./install.sh iu.diachenko` ставит те же конфиги одноимённому пользователю. В обход `install.sh all` не попадает (`find -type d` не следует по симлинкам).
 
 ## Установка

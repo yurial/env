@@ -7,6 +7,8 @@ defutf8 on
 #escape ^Xx
 #bind  lockscreen
 
+term screen-256color
+
 hardstatus on
 hardstatus alwayslastline
 hardstatus string "%{= g} %{= w}%-w%{=r}%n %t%{-}%+W"
