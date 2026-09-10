@@ -6,9 +6,7 @@ model: vk-zai-personal/cheap
 variant: smart
 permission:
   "*": allow
-  bash:
-    "*": allow
-    "sleep*": deny
+  bash: deny
   task:
     "*": deny
     assistant_stupid: allow

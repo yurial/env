@@ -6,9 +6,7 @@ model: vk-zai-personal/cheap
 variant: stupid
 permission:
   "*": allow
-  bash:
-    "*": allow
-    "sleep*": deny
+  bash: deny
   task: deny
 prompt: "{file:./rules/assistant.md}"
 ---
