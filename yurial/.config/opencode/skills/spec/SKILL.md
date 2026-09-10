@@ -211,9 +211,14 @@ its single value marked `magic`, no default:
 | `60000` ms, `batch_timeout` upper bound | `magic` 60000 ms | — | Values above 60000 ms are rejected as out of range (R4) |
 
 ## Behavior
-Numbered requirements, each testable, each with a stable ID:
+Numbered requirements, each testable, each with a stable ID. Every line is
+declarative, states exactly one behavior feature, uses common language and
+generally accepted terms — local terms only with their interpretation fixed
+in Definitions and recorded in GLOSSARY.md — and is unambiguous to the
+reader:
 - R1. On `put(k, v)` where k exists, the old value is replaced atomically.
-- R2. A key expires after TTL seconds; reads of expired keys return NOT_FOUND.
+- R2. A key expires after TTL seconds.
+- R3. A read of an expired key returns NOT_FOUND.
 Sequencing rules, ordering guarantees, algorithm semantics (steps or
 invariants, not code).
 
@@ -278,8 +283,18 @@ Writing rules:
   names A. When the semantic use disappears (requirement dropped or
   rewritten, term replaced), the link is removed from BOTH sides in the same
   commit — never leave one-sided or stale "just in case" links.
-- Statements are declarative and testable: "must", "never", "exactly once".
-  If a requirement cannot be falsified by a test, it is a note, not a requirement.
+- **Statements are declarative and testable, one behavior feature per line.**
+  Behavior requirements are written in declarative language ("must", "never",
+  "exactly once"): each states what the component does — never a narrative of
+  how the code does it. Each line (numbered requirement) describes exactly
+  ONE behavior feature: no compound statements bundling several behaviors —
+  split them into separate requirements. Vocabulary is common language with
+  generally accepted terms and keywords; local (project-specific) terms are
+  part of it only when their interpretation is defined in the spec's
+  Definitions section and recorded in GLOSSARY.md (full-ID rule above).
+  Every line must be unambiguous: a reader must not need to guess what is
+  meant. If a requirement cannot be falsified by a test, it is a note, not
+  a requirement.
 - Stable IDs (R1, R2, ...) are referenced by code comments, tests, and commits;
   never renumber — retire IDs (drop the statement, note the retirement in
   DEVIATIONS.md) instead.
@@ -506,6 +521,16 @@ Rules:
   no abstraction level, omit the Not-checked list, claim proof for bounded
   TLC evidence, or survive a behavior change to the algorithm.
 - Spec as narrative prose with no testable statements or IDs.
+- Compound behavior requirements: one line bundling several behavior features
+  ("expires after TTL seconds and reads of expired keys return NOT_FOUND") —
+  one feature per requirement; split it (section 4 writing rules).
+- Undefined local terms in requirements: project jargon or ad-hoc names whose
+  interpretation is fixed nowhere — no Definitions entry, no GLOSSARY.md row;
+  requirement lines may use common terms and defined full-ID terms only
+  (sections 3a, 4).
+- Ambiguous or vague wording in a requirement line ("handles it reasonably",
+  "usually fast", "as appropriate") — a line the reader must interpret by
+  guessing is not a requirement (section 4 writing rules).
 - Spec detailing private implementation (locks refactoring into the contract).
 - Mixing units/naming with sibling specs (the shared-vocabulary check exists
   for this).
