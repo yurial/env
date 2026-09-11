@@ -13,5 +13,5 @@ hardstatus on
 hardstatus alwayslastline
 hardstatus string "%{= g} %{= w}%-w%{=r}%n %t%{-}%+W"
 
-#setenv SSH_AUTH_SOCK $HOME/.ssh/agent.sock
+setenv SSH_AUTH_SOCK $HOME/.ssh/agent.sock
 
