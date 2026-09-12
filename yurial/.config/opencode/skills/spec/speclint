@@ -1,0 +1,205 @@
+#!/bin/sh
+# speclint — mechanical checks over specs authored with the spec skill.
+#
+# Usage: speclint <path>...
+#   path: a spec .md file, an index.md, a GLOSSARY.md, or a directory
+#         (a directory lints every index.md found inside first — collecting
+#         reference IDs — then every GLOSSARY.md, then every other .md file
+#         recursively).
+#
+# Spec file checks:
+#   - requirement lines match "- R<digits>(.<digits>)*[.] Text";
+#   - a leaf line ends with '.', a group line ends with ':';
+#   - an ID with children is a group, an ID without children is a leaf;
+#   - requirement IDs are unique; every child's ancestor IDs exist and
+#     are groups;
+#   - every Examples entry A<x> mirrors an existing requirement R<x>.
+# index.md checks:
+#   - row paths exist; Status is draft or stable; Reference is a lowercase
+#     hyphen-separated unique ID.
+# GLOSSARY.md checks:
+#   - term IDs are lowercase <reference>/<term>; alphabetical order;
+#     Defined in equals the term prefix (optionally with requirement IDs);
+#     the prefix resolves against the collected index references.
+#
+# Findings go to stderr. Exit status: 0 — clean, 1 — findings, 2 — usage.
+# Known limit: a requirement wrapped onto continuation lines is invisible
+# to a line-based lint; the one-line rule stays a review check.
+
+set -u
+
+fail=0
+
+[ $# -ge 1 ] || { printf 'usage: speclint <path>...\n' >&2; exit 2; }
+
+refsrc=$(mktemp "${TMPDIR:-/tmp}/speclint.refs.XXXXXX") || exit 2
+filelist=$(mktemp "${TMPDIR:-/tmp}/speclint.list.XXXXXX") || exit 2
+trap 'rm -f "$refsrc" "$filelist"' EXIT INT TERM
+
+lint_spec() {
+    awk '
+        function err(nr, m) {
+            printf "%s:%d: %s\n", FILENAME, nr, m > "/dev/stderr"
+            bad = 1
+        }
+        /^- R[0-9]+(\.[0-9]+)*[ .:]/ {
+            id = $0; sub(/^- R/, "", id); sub(/[^0-9.].*$/, "", id); sub(/\.$/, "", id)
+            tail = $0; sub(/^- R[0-9]+(\.[0-9]+)*/, "", tail)
+            if (substr(tail, 1, 1) != ".") {
+                err(NR, "requirement ID must be followed by a period and a space")
+                next
+            }
+            key = "." id
+            if (key in seen) {
+                err(NR, "duplicate requirement ID R" id)
+                next
+            }
+            seen[key] = substr($0, length($0), 1)
+            ln[key] = NR
+        }
+        /^- A[0-9]+(\.[0-9]+)*\./ {
+            aid = $0; sub(/^- A/, "", aid); sub(/[^0-9.].*$/, "", aid); sub(/\.$/, "", aid)
+            if (!("." aid in seen))
+                err(NR, "Examples entry A" aid " mirrors no requirement R" aid)
+        }
+        END {
+            for (k in seen) {
+                haschild = 0
+                for (j in seen)
+                    if (j != k && index(j, k ".") == 1) { haschild = 1; break }
+                if (seen[k] == ":" && !haschild)
+                    err(ln[k], "group ID R" substr(k, 2) " has no children")
+                if (seen[k] == "." && haschild)
+                    err(ln[k], "leaf ID R" substr(k, 2) " has children - a group line ends with a colon")
+                if (seen[k] != "." && seen[k] != ":")
+                    err(ln[k], "requirement line R" substr(k, 2) " must end with . (leaf) or : (group)")
+                p = k
+                while (sub(/\.[0-9]+$/, "", p) > 0 && p != "") {
+                    if (!(p in seen)) {
+                        err(ln[k], "ancestor ID R" substr(p, 2) " of R" substr(k, 2) " is missing")
+                        break
+                    }
+                    if (seen[p] == ".")
+                        err(ln[p], "ancestor ID R" substr(p, 2) " of R" substr(k, 2) " is a leaf, must be a group (:)")
+                }
+            }
+            exit bad ? 1 : 0
+        }
+    ' "$1" || fail=1
+}
+
+lint_index() {
+    idxdir=$(dirname "$1")
+    root=$(git -C "$idxdir" rev-parse --show-toplevel 2>/dev/null) || root=
+    if [ -z "$root" ]; then
+        if [ "$(basename "$idxdir")" = "specs" ]; then
+            root=$(dirname "$idxdir")
+        else
+            root="$idxdir"
+        fi
+    fi
+    awk -v idxdir="$idxdir" -v root="$root" '
+        function trim(s) { gsub(/^[ \t]+|[ \t]+$/, "", s); return s }
+        function err(nr, m) {
+            printf "%s:%d: %s\n", FILENAME, nr, m > "/dev/stderr"
+            bad = 1
+        }
+        /^\|/ {
+            if ($0 ~ /^\|[ \t]*-+/) next
+            n = split($0, f, "|")
+            if (n < 5) next
+            for (i = 2; i <= 4; i++) f[i] = trim(f[i])
+            path = f[2]; ref = f[3]; st = f[4]
+            if (path == "Path" || path == "") next
+            if (system("test -e \"" root "/" path "\"") != 0 && system("test -e \"" idxdir "/" path "\"") != 0)
+                err(NR, "index row path does not exist (tried " root "/" path " and " idxdir "/" path "): " path)
+            if (st != "draft" && st != "stable")
+                err(NR, "Status must be draft or stable, got: " st)
+            if (ref !~ /^[a-z0-9]+(-[a-z0-9]+)*$/)
+                err(NR, "Reference must be a lowercase hyphen-separated ID: " ref)
+            else if (ref in refs)
+                err(NR, "duplicate Reference: " ref)
+            refs[ref] = 1
+            print ref
+        }
+        END { exit bad ? 1 : 0 }
+    ' "$1" >> "$refsrc" || fail=1
+}
+
+lint_glossary() {
+    if [ -s "$refsrc" ]; then
+        checkrefs=1
+    else
+        checkrefs=0
+        printf 'speclint: %s: no index references collected (lint an index.md first); prefix resolution skipped\n' "$1" >&2
+    fi
+    awk -v REFFILE="$refsrc" -v CHECKREFS="$checkrefs" '
+        function trim(s) { gsub(/^[ \t]+|[ \t]+$/, "", s); return s }
+        function err(nr, m) {
+            printf "%s:%d: %s\n", FILENAME, nr, m > "/dev/stderr"
+            bad = 1
+        }
+        BEGIN {
+            while ((getline l < REFFILE) > 0) { sub(/\n$/, "", l); refs[l] = 1 }
+            close(REFFILE)
+            prev = ""
+        }
+        /^\|/ {
+            if ($0 ~ /^\|[ \t]*-+/) next
+            n = split($0, f, "|")
+            if (n < 4) next
+            for (i = 2; i <= 4; i++) f[i] = trim(f[i])
+            term = f[2]; def = f[3]; where = f[4]
+            if (term == "Term" || term == "") next
+            if (term !~ /^[a-z0-9-]+\/[a-z0-9-]+$/) {
+                err(NR, "term ID must be lowercase <reference>/<term>: " term)
+                next
+            }
+            if (prev != "" && term < prev)
+                err(NR, "glossary not alphabetical: " term " after " prev)
+            prev = term
+            split(term, pp, "/")
+            if (where != pp[1] && where !~ ("^" pp[1] " \\([A-Za-z0-9., -]+\\)$"))
+                err(NR, "Defined in must equal the term prefix " pp[1] " (optionally with requirement IDs), got: " where)
+            if (CHECKREFS == 1 && !(pp[1] in refs))
+                err(NR, "term prefix " pp[1] " resolves to no index reference")
+        }
+        END { exit bad ? 1 : 0 }
+    ' "$1" || fail=1
+}
+
+for arg in "$@"; do
+    if [ -d "$arg" ]; then
+        find "$arg" -name index.md -type f | LC_ALL=C sort > "$filelist"
+        while IFS= read -r f; do lint_index "$f"; done < "$filelist"
+        find "$arg" -name GLOSSARY.md -type f | LC_ALL=C sort > "$filelist"
+        while IFS= read -r f; do lint_glossary "$f"; done < "$filelist"
+        find "$arg" -name '*.md' ! -name index.md ! -name GLOSSARY.md -type f | LC_ALL=C sort > "$filelist"
+        while IFS= read -r f; do lint_spec "$f"; done < "$filelist"
+    elif [ -f "$arg" ]; then
+        case $(basename "$arg") in
+            index.md)
+                lint_index "$arg"
+                ;;
+            GLOSSARY.md)
+                d=$(dirname "$arg")
+                if [ ! -s "$refsrc" ] && [ -f "$d/index.md" ]; then
+                    lint_index "$d/index.md"
+                fi
+                lint_glossary "$arg"
+                ;;
+            *.md)
+                lint_spec "$arg"
+                ;;
+            *)
+                printf 'speclint: %s: not a .md file\n' "$arg" >&2
+                fail=1
+                ;;
+        esac
+    else
+        printf 'speclint: %s: no such file or directory\n' "$arg" >&2
+        fail=1
+    fi
+done
+
+exit "$fail"

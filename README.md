@@ -40,7 +40,7 @@
   - `assistant_heavy` — исполнитель на модели `vk-zai-personal/heavy` (glm-5.3, reasoning max): правки артефактов правил (spec/skills/rules, TLA-спеки и их индексы, DEVIATIONS.md), а также эскалация, когда flash-исполнители не справляются — очень сложный дебаг, поиск неуловимых ошибок, супер-сложные design-задачи.
   - `build`, `explorer`, `general`, `plan`, `scout` — отключены (`disable: true`).
 - `rules/` — промпты и общие правила: `main.md`, `assistant.md` (промпты агентов), `common.md` (дисциплина: worktree на задачу, запрет `sleep`, гигиена коммитов), `delegation.md` (протокол делегирования), `readme.md`, `call.md`, `todowrite.md`.
-- `skills/` — специализированные навыки: `spec` (спеки, spec-first flow), `tla-plus` (TLA+-спеки и TLC-модели), `tlaps` (иерархические доказательства через tlapm), `tlc-run` (запуск TLC и разбор вывода).
+- `skills/` — специализированные навыки: `spec` (спеки, spec-first flow; механические проверки спек — скрипт `speclint` в каталоге навыка), `tla-plus` (TLA+-спеки и TLC-модели), `tlaps` (иерархические доказательства через tlapm), `tlc-run` (запуск TLC и разбор вывода).
 
 ### Как ходит запрос
 

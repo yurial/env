@@ -36,8 +36,8 @@ When authoring or updating a specification with the `spec` skill, follow this
 two-step agent delegation workflow:
 
 1. **Research with assistant_cheap.** Use the `assistant_cheap` researcher agent
-    (on glm-4.6v) to read the relevant specs, sources, and documentation.
-   The agent should save references to useful documents with exact line ranges
+    to read the relevant specs, sources, and documentation.
+    The agent should save references to useful documents with exact line ranges
    in a temporary draft file (e.g. `specs/draft.md` or a working copy in the
    project root). The draft should contain:
    - Links to source files or URLs with line number ranges
@@ -50,9 +50,9 @@ two-step agent delegation workflow:
    approved.
 
 2. **Generate with assistant_heavy.** Once the research draft is ready, use the
-   `assistant_heavy` agent (on vk-zai-personal/heavy with reasoningEffort max) to
-   author or update the specification according to the templates and writing
-   rules in sections 3-4. The draft file serves as the source of truth for
+    `assistant_heavy` agent to author or update the specification according
+    to the templates and writing rules in sections 3-4. The draft file
+    serves as the source of truth for
    references and gaps; the spec generation should cite specific requirement
    IDs, maintain bidirectional links (Dependencies/Used-by), and follow the
    layout and format rules.
@@ -66,9 +66,9 @@ two-step agent delegation workflow:
    methodology or rationale that is valuable for future reference).
 
 This workflow ensures that the authoring process leverages the research
-capabilities of assistant_cheap (cheap, read-only, reasoning-heavy) before
-moving to the high-effort spec writing with assistant_heavy, keeping the draft
-ephemeral and easily deletable.
+capabilities of assistant_cheap (cheap, read-only) before moving to the
+high-effort spec writing with assistant_heavy, keeping the draft ephemeral
+and easily deletable.
 
 ## 2. Layout by project size
 
@@ -144,6 +144,8 @@ Rules:
   strictly English, at every occurrence — glossary, Definitions sections,
   requirement text. The prefix must equal an existing reference from
   specs/index.md; the bare short form (`connection`) is never used.
+  Strictly English applies to the term IDs; the Definition text and the
+  glossary prose follow the project's spec language (section 4).
 - Alphabetical order by full term ID, always — a glossary is looked up, not
   read.
 - One row per term ID. `Defined in` cites the owning reference — which must
@@ -175,9 +177,10 @@ Status: stable | draft
 Spec source of truth for: <component / feature name>
 
 ## Overview
-What this component does and why it exists. The place for explanations and
-rationale behind the requirements — requirement lines never carry them
-(Behavior rules below).
+What this component does and why it exists. The place for system-level
+explanations and rationale behind the requirements; may cite requirement
+IDs. Requirement lines never carry explanations (Behavior rules below);
+per-requirement examples and explanations live in Examples (Ax.y entries).
 
 ## Scope
 In: <explicit list of responsibilities>.
@@ -191,8 +194,11 @@ yt-core-bus/connection); English only.
 Signatures, endpoints, CLI verbs, message schemas, config keys — the
 externally observable contract. Every element named and typed. The
 argument contract lives here: allowed values of every method argument
-(input) and allowed values of every result (output). Config-key names
-and types live here; allowed values and effect live in Configuration.
+(input) and allowed values of every result (output), error codes
+included — the complete error-code set is declared here as allowed
+result values. Config-key names and types live here; allowed values and
+effect live in Configuration. Error handling carries the semantics of
+the error codes, never their enumeration.
 
 ## Configuration
 Mandatory when the component has configurable parameters, named
@@ -215,28 +221,47 @@ its single value marked `magic`, no default:
 | `60000` ms, `batch_timeout` upper bound | `magic` 60000 ms | — | Values above 60000 ms are rejected as out of range (R4) |
 
 ## Behavior
-Numbered requirements, each testable, each with a stable ID — flat (R1) or
-multi-level (R2.1, R4.2.1; nesting groups related requirements). Every
-requirement occupies exactly one line of the spec file. Every requirement is
-written in simple declarative sentences — a line may carry more than one
-sentence, each simple. A requirement line declares the rule only —
-no explanations or rationale inside it; those live in Overview. Every line
-states exactly one behavior feature, uses common language and generally
-accepted terms — local terms only with their interpretation fixed in
-Definitions and recorded in GLOSSARY.md — and is unambiguous to the reader:
-- R1. `put(k, v)` with an existing key atomically replaces the old value.
-- R2. A key expires after TTL seconds.
-- R2.1. Key expiry counts from the last write to that key.
-- R3. A read of an expired key returns NOT_FOUND.
 Sequencing rules, ordering guarantees, algorithm semantics (steps or
-invariants, not code).
+invariants, not code) — written as numbered requirements. Each requirement
+has a stable ID — flat (R1) or multi-level (R2.1, R4.2.1). Every leaf
+requirement is testable. An ID with children is a group, not a requirement:
+its line is a caption ending with a colon, states no behavior, and names
+what its children govern. Every requirement occupies exactly one line of
+the spec file. Every requirement is written in declarative sentences; a
+line may carry more than one sentence, each without joined independent
+clauses and with at most one subordinate condition or time clause. A
+requirement line declares the rule only — no explanations or rationale
+inside it; those live in Overview and Examples. Every requirement line
+states exactly one behavior feature, uses common language and generally
+accepted terms —
+local terms only with their interpretation fixed in Definitions and
+recorded in GLOSSARY.md — and is unambiguous to the reader:
+- R1. `put(k, v)` with an existing key atomically replaces the old value.
+- R2. Key expiry:
+- R2.1. A key expires after TTL seconds.
+- R2.2. Key expiry counts from the last write to that key.
+- R3. A read of an expired key returns NOT_FOUND.
+Citations use IDs and ID ranges (R3-R7). A citation covers the cited ID
+together with its whole subtree; a range covers every ID from its first
+endpoint to its last, subtrees included.
+
+## Examples
+Optional; present when any requirement needs an illustration or
+explanation. One entry per explained requirement, the A-ID mirroring the
+R-ID: A3 explains R3; A2 explains the R2 group with its subtree. An entry
+holds concrete input→output examples and explanations, no new requirements:
+- A3. `get("k")` on a key expired one second ago returns NOT_FOUND.
+- A2. R2 subtree: `put("k", v)` at t0; `get("k")` at t0+TTL+1 s returns
+  NOT_FOUND; a write at t1 restarts the expiry clock (R2.2).
 
 ## Constraints
 Hard limits and invariants: capacity, latency budgets, compatibility
 (versions, formats), security, environment assumptions.
 
 ## Error handling
-Error classes, codes, retry semantics, partial-failure behavior.
+Semantics of the error codes enumerated in Interface: classes, retry
+semantics, partial-failure behavior. Never enumerates the codes — their
+complete set is an Interface result-value declaration.
 
 ## Dependencies
 Specs whose terms, interfaces, or constraints this spec uses or constrains
@@ -266,7 +291,9 @@ the tla-plus / tlaps skills for run rules.
   Not checked: Nodes > 3; Byzantine faults (crash only); no TLAPS proof
 ```
 
-Writing rules:
+Writing rules — a format rule lives in three coordinated places: the
+template above, this list, and the anti-patterns (section 8); a change to
+any format rule updates all three places in the same commit:
 - **Cross-spec references use reference IDs, never file paths.** The only
   valid way to cite another spec is its `Reference` value from specs/index.md
   (e.g. `auth`, `yt-core-bus`) — paths break when files move between root
@@ -298,14 +325,17 @@ Writing rules:
   how the code does it. Each line (numbered requirement) describes exactly
   ONE behavior feature: no compound statements bundling several behaviors —
   split them into separate requirements. A requirement line may carry more
-  than one sentence. Every sentence is simple and declarative: no compound
-  or complex sentences — clauses joined into one sentence are split into
+  than one sentence. Every sentence is declarative; compound sentences —
+  independent clauses joined into one — are forbidden: split them into
   separate sentences (into separate requirements when they state separate
-  behavior features). A requirement
-  occupies exactly one line of the spec file: wrapping it onto several lines
-  is forbidden, however long the line grows. A requirement line declares
-  only — rationale, motivation, and explanations never appear inside it;
-  Overview carries them (template above). Vocabulary is common language with
+  behavior features). At most one subordinate clause per sentence is
+  allowed, and only a condition or time clause ("when the lease expires,
+  the message is redelivered"). A requirement occupies exactly one line of
+  the spec file: wrapping it onto several lines is forbidden, however long
+  the line grows. A requirement line declares only — rationale, motivation,
+  explanations, and examples never appear inside it; Overview carries the
+  system-level rationale, the Examples section carries per-requirement
+  examples and explanations (template above). Vocabulary is common language with
   generally accepted terms and keywords; local (project-specific) terms are
   part of it only when their interpretation is defined in the spec's
   Definitions section and recorded in GLOSSARY.md (full-ID rule above).
@@ -315,20 +345,28 @@ Writing rules:
 - Stable IDs (R1, R2.1, R4.2.1, ...) are referenced by code comments, tests,
   and commits; never renumber — retire IDs (drop the statement, note the
   retirement in DEVIATIONS.md) instead. Multi-level IDs (Rx.y.z, any depth)
-  are allowed: nesting groups related requirements; every ID at every level
-  is unique, and the no-renumbering and retirement rules apply to every
-  level equally.
-- Include concrete input→output examples for every nontrivial rule; an
-  example never merges into the requirement line — it follows the
-  requirement as its own line or block.
+  are allowed; every ID at every level is unique, and the no-renumbering
+  and retirement rules apply to every level equally. An ID with children is
+  a group, not a requirement: its line is a caption ending with a colon and
+  states no behavior. A citation of an ID covers it together with its whole
+  subtree; an ID range (R3-R7) covers every ID between its endpoints,
+  subtrees included.
+- Include concrete input→output examples for every nontrivial rule. A
+  requirement line carries no example and no explanation; examples and
+  per-requirement explanations live in the Examples section as Ax.y entries
+  mirroring the requirement IDs they explain (A2.1 explains R2.1; A2 covers
+  the R2 subtree).
 - Record algorithms as behavior (steps, invariants, complexity bounds), not as
   implementation (no source files, class names, or private helpers).
 - **The input/output argument contract lives in Interface.** For every
   method, endpoint, CLI verb, or message schema, the Interface section
   declares the allowed values of each argument and the allowed values of
-  the result. Configurable parameters are the exception: their allowed
-  values and effect live in Configuration (rule below); Interface carries
-  only the config-key names and types.
+  the result. Error codes are allowed result values: the complete set is
+  enumerated in Interface; Error handling states their semantics (classes,
+  retries, partial failures) and never re-enumerates them. Configurable
+  parameters are the exception: their allowed values and effect live in
+  Configuration (rule below); Interface carries only the config-key names
+  and types.
 - **Configuration section is mandatory when configurable parameters,
   named constants, or magic numbers exist** (template section above).
   Whenever the component exposes at least one configurable parameter —
@@ -395,8 +433,16 @@ Writing rules:
 
 ## 5. Post-change consistency check (always, before implementing)
 
-After editing any spec, run this pass over the *related* specs (found via the
-index, Dependencies sections, and shared vocabulary):
+First the mechanical pass: run `speclint` (shipped in this skill's
+directory) over the changed spec files — and over `specs/index.md` and
+`specs/GLOSSARY.md` when they are touched. It checks the requirement-line
+format (R-ID syntax, group/leaf colon consistency, unique IDs,
+A↔R mirroring), index path existence with valid Status values, and glossary
+alphabetical order with resolvable prefixes. Fix every finding before the
+semantic pass.
+
+After editing any spec, run the semantic pass over the *related* specs
+(found via the index, Dependencies sections, and shared vocabulary):
 
 1. **Shared identifiers**: names, term IDs, message fields, config keys, error
    codes, units (ms vs s), versions — same name must mean the same thing
@@ -517,16 +563,12 @@ Rules:
 
 ## 8. Anti-patterns
 
+Findings grouped by area; every entry is reported, not skipped. The format
+entries mirror the template and writing rules of section 4 — change the
+three places together (section 4 preamble).
+
+### Spec-first and change flow
 - Code change shipped with no spec change (drift; the spec stops binding).
-- Two specs of one component (root SPEC.md + specs/copy, centralized + colocated)
-  — one canonical, the other a pointer.
-- Colocated `<library>/<component>/SPEC.md` missing from the index.
-- Index rows for deleted/moved files; stale Status values.
-- Keeping superseded/obsolete specs or spec parts "for reference" — delete or
-  rewrite them (section 3); history lives in git.
-- Strikethrough archives or change logs inside spec files — the spec states
-  current requirements only; behavior changes land in the spec itself, the
-  divergences they open go to DEVIATIONS.md.
 - Behavior-changing spec edit without a DEVIATIONS.md entry — unless the
   conforming code lands in that same commit (no divergence, no entry;
   section 6).
@@ -534,9 +576,31 @@ Rules:
   conforms (section 6 lifecycle), or reading `Was`/`Now` as "what was and what
   became" history — an entry states an OPEN divergence and must not exist once
   spec and code agree.
+- Keeping superseded/obsolete specs or spec parts "for reference" — delete or
+  rewrite them (section 3); history lives in git.
+- Strikethrough archives or change logs inside spec files — the spec states
+  current requirements only; behavior changes land in the spec itself, the
+  divergences they open go to DEVIATIONS.md.
+- Resolving a spec-vs-spec contradiction by editing one side quietly.
+
+### Layout and index
+- Two specs of one component (root SPEC.md + specs/copy, centralized + colocated)
+  — one canonical, the other a pointer.
+- Colocated `<library>/<component>/SPEC.md` missing from the index.
+- Index rows for deleted/moved files; stale Status values.
+
+### Links and citations
 - Renumbering requirements (breaks external references) — retire IDs instead.
 - Citing another spec by file path instead of its index reference ID — the
   reference breaks on the first file move (section 4 writing rules).
+- One-sided links: A cites B in Dependencies but B's Used by lacks A (or the
+  link was removed from one side only when the semantic use ended).
+- Formal links without semantic basis — "related specs" entries kept for
+  history or courtesy; the tie must trace to a live requirement, definition,
+  or interface element or be deleted from both sides.
+- Using a term from another spec without listing that spec in Dependencies.
+
+### Terms and glossary
 - Bare or non-English terms: `connection` instead of `yt-core-bus/connection`,
   a translated term, or a prefix naming no reference in the index — the full
   English ID is mandatory at every occurrence (sections 3a, 4).
@@ -544,19 +608,11 @@ Rules:
   spec's language has a native word — use the native word, or introduce
   the concept as a defined term; the only verbatim English is term IDs
   and code identifiers/literals (section 4 language rule).
-- Using a term from another spec without listing that spec in Dependencies.
 - specs/GLOSSARY.md out of sync: missing rows for introduced terms, dangling
   rows for deleted references, `Defined in` disagreeing with the term prefix,
   broken alphabetical order, or two definitions of one term ID.
-- One-sided links: A cites B in Dependencies but B's Used by lacks A (or the
-  link was removed from one side only when the semantic use ended).
-- Formal links without semantic basis — "related specs" entries kept for
-  history or courtesy; the tie must trace to a live requirement, definition,
-  or interface element or be deleted from both sides.
-- "Verified"/"tested" claims about algorithms with no Verification entry, or
-  entries that: name no specific algorithm (in a multi-algorithm spec), state
-  no abstraction level, omit the Not-checked list, claim proof for bounded
-  TLC evidence, or survive a behavior change to the algorithm.
+
+### Requirement format
 - Spec as narrative prose with no testable statements or IDs.
 - Compound behavior requirements: one line bundling several behavior features
   ("expires after TTL seconds and reads of expired keys return NOT_FOUND") —
@@ -564,14 +620,20 @@ Rules:
 - A requirement wrapped onto several lines of the spec file — one rule, one
   line; wrapping is forbidden however long the line grows (section 4 writing
   rules).
-- A compound or complex sentence inside a requirement line — every
-  sentence of a requirement is simple; split the joined clauses into
-  separate sentences (into separate requirements when they state separate
-  behavior features); a line may carry several sentences (section 4
-  writing rules).
+- Joined independent clauses or a stack of subordinate clauses inside a
+  requirement sentence — split the independent clauses into separate
+  sentences (into separate requirements when they state separate behavior
+  features); at most one condition or time subordinate clause per sentence
+  survives (section 4 writing rules).
 - Explanation, rationale, motivation, or an example merged into a requirement
-  line — requirement lines declare only; explanations live in Overview and
-  examples follow the requirement as their own line or block (section 4).
+  line — requirement lines declare only; system-level rationale lives in
+  Overview, examples and per-requirement explanations live in the Examples
+  section as Ax.y entries mirroring R-IDs (section 4).
+- A group line that states a requirement, or a leaf ID carrying children —
+  an ID with children is a group caption ending with a colon; a leaf ends
+  with a period (section 4).
+- An Ax.y Examples entry with no matching Rx.y — a dangling explanation;
+  delete it or re-point it when the requirement retires (section 4).
 - Undefined local terms in requirements: project jargon or ad-hoc names whose
   interpretation is fixed nowhere — no Definitions entry, no GLOSSARY.md row;
   requirement lines may use common terms and defined full-ID terms only
@@ -579,14 +641,13 @@ Rules:
 - Ambiguous or vague wording in a requirement line ("handles it reasonably",
   "usually fast", "as appropriate") — a line the reader must interpret by
   guessing is not a requirement (section 4 writing rules).
-- Spec detailing private implementation (locks refactoring into the contract).
-- Mixing units/naming with sibling specs (the shared-vocabulary check exists
-  for this).
+
+### Interface and Configuration
 - Method-argument or result value domains declared outside Interface —
-  allowed values of arguments and results (the input/output contract)
-  live in Interface; allowed values of configurable parameters live in
-  Configuration. A value domain in the wrong section or nowhere is a
-  spec gap.
+  allowed values of arguments and results (the input/output contract, error
+  codes included) live in Interface; allowed values of configurable
+  parameters live in Configuration. A value domain in the wrong section or
+  nowhere is a spec gap.
 - A configurable parameter, named constant, or magic number with no
   Configuration entry — or an entry missing allowed values (type,
   bounds or enum, default, units; the `fixed`/`magic` value for a fixed
@@ -598,4 +659,14 @@ Rules:
   literal records what the code actually carries — a nameless value;
   promoting it to a named constant is a code change, and only then does
   its row become `fixed` keyed by the identifier.
-- Resolving a spec-vs-spec contradiction by editing one side quietly.
+
+### Structure and scope
+- Spec detailing private implementation (locks refactoring into the contract).
+- Mixing units/naming with sibling specs (the shared-vocabulary check exists
+  for this).
+
+### Verification
+- "Verified"/"tested" claims about algorithms with no Verification entry, or
+  entries that: name no specific algorithm (in a multi-algorithm spec), state
+  no abstraction level, omit the Not-checked list, claim proof for bounded
+  TLC evidence, or survive a behavior change to the algorithm.
