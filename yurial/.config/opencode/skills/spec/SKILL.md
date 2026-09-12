@@ -175,7 +175,9 @@ Status: stable | draft
 Spec source of truth for: <component / feature name>
 
 ## Overview
-One paragraph: what this component does and why it exists.
+What this component does and why it exists. The place for explanations and
+rationale behind the requirements — requirement lines never carry them
+(Behavior rules below).
 
 ## Scope
 In: <explicit list of responsibilities>.
@@ -211,13 +213,17 @@ its single value marked `magic`, no default:
 | `60000` ms, `batch_timeout` upper bound | `magic` 60000 ms | — | Values above 60000 ms are rejected as out of range (R4) |
 
 ## Behavior
-Numbered requirements, each testable, each with a stable ID. Every line is
-declarative, states exactly one behavior feature, uses common language and
-generally accepted terms — local terms only with their interpretation fixed
-in Definitions and recorded in GLOSSARY.md — and is unambiguous to the
-reader:
-- R1. On `put(k, v)` where k exists, the old value is replaced atomically.
+Numbered requirements, each testable, each with a stable ID — flat (R1) or
+multi-level (R2.1, R4.2.1; nesting groups related requirements). Every
+requirement occupies exactly one line of the spec file. Every requirement is
+one simple declarative sentence. A requirement line declares the rule only —
+no explanations or rationale inside it; those live in Overview. Every line
+states exactly one behavior feature, uses common language and generally
+accepted terms — local terms only with their interpretation fixed in
+Definitions and recorded in GLOSSARY.md — and is unambiguous to the reader:
+- R1. `put(k, v)` with an existing key atomically replaces the old value.
 - R2. A key expires after TTL seconds.
+- R2.1. Key expiry counts from the last write to that key.
 - R3. A read of an expired key returns NOT_FOUND.
 Sequencing rules, ordering guarantees, algorithm semantics (steps or
 invariants, not code).
@@ -288,17 +294,28 @@ Writing rules:
   "exactly once"): each states what the component does — never a narrative of
   how the code does it. Each line (numbered requirement) describes exactly
   ONE behavior feature: no compound statements bundling several behaviors —
-  split them into separate requirements. Vocabulary is common language with
+  split them into separate requirements. A requirement line is one simple
+  sentence: no compound or complex sentences — clauses joined into one
+  sentence are split into separate requirements the same way. A requirement
+  occupies exactly one line of the spec file: wrapping it onto several lines
+  is forbidden, however long the line grows. A requirement line declares
+  only — rationale, motivation, and explanations never appear inside it;
+  Overview carries them (template above). Vocabulary is common language with
   generally accepted terms and keywords; local (project-specific) terms are
   part of it only when their interpretation is defined in the spec's
   Definitions section and recorded in GLOSSARY.md (full-ID rule above).
   Every line must be unambiguous: a reader must not need to guess what is
   meant. If a requirement cannot be falsified by a test, it is a note, not
   a requirement.
-- Stable IDs (R1, R2, ...) are referenced by code comments, tests, and commits;
-  never renumber — retire IDs (drop the statement, note the retirement in
-  DEVIATIONS.md) instead.
-- Include concrete input→output examples for every nontrivial rule.
+- Stable IDs (R1, R2.1, R4.2.1, ...) are referenced by code comments, tests,
+  and commits; never renumber — retire IDs (drop the statement, note the
+  retirement in DEVIATIONS.md) instead. Multi-level IDs (Rx.y.z, any depth)
+  are allowed: nesting groups related requirements; every ID at every level
+  is unique, and the no-renumbering and retirement rules apply to every
+  level equally.
+- Include concrete input→output examples for every nontrivial rule; an
+  example never merges into the requirement line — it follows the
+  requirement as its own line or block.
 - Record algorithms as behavior (steps, invariants, complexity bounds), not as
   implementation (no source files, class names, or private helpers).
 - **Configuration section is mandatory when configurable parameters,
@@ -524,6 +541,15 @@ Rules:
 - Compound behavior requirements: one line bundling several behavior features
   ("expires after TTL seconds and reads of expired keys return NOT_FOUND") —
   one feature per requirement; split it (section 4 writing rules).
+- A requirement wrapped onto several lines of the spec file — one rule, one
+  line; wrapping is forbidden however long the line grows (section 4 writing
+  rules).
+- A requirement written as a compound or complex sentence — one requirement
+  is one simple sentence; split the clauses into separate requirements
+  (section 4 writing rules).
+- Explanation, rationale, motivation, or an example merged into a requirement
+  line — requirement lines declare only; explanations live in Overview and
+  examples follow the requirement as their own line or block (section 4).
 - Undefined local terms in requirements: project jargon or ad-hoc names whose
   interpretation is fixed nowhere — no Definitions entry, no GLOSSARY.md row;
   requirement lines may use common terms and defined full-ID terms only
