@@ -189,8 +189,10 @@ yt-core-bus/connection); English only.
 
 ## Interface
 Signatures, endpoints, CLI verbs, message schemas, config keys — the
-externally observable contract. Every element named and typed. Config-key
-names and types live here; allowed values and effect live in Configuration.
+externally observable contract. Every element named and typed. The
+argument contract lives here: allowed values of every method argument
+(input) and allowed values of every result (output). Config-key names
+and types live here; allowed values and effect live in Configuration.
 
 ## Configuration
 Mandatory when the component has configurable parameters, named
@@ -318,6 +320,12 @@ Writing rules:
   requirement as its own line or block.
 - Record algorithms as behavior (steps, invariants, complexity bounds), not as
   implementation (no source files, class names, or private helpers).
+- **The input/output argument contract lives in Interface.** For every
+  method, endpoint, CLI verb, or message schema, the Interface section
+  declares the allowed values of each argument and the allowed values of
+  the result. Configurable parameters are the exception: their allowed
+  values and effect live in Configuration (rule below); Interface carries
+  only the config-key names and types.
 - **Configuration section is mandatory when configurable parameters,
   named constants, or magic numbers exist** (template section above).
   Whenever the component exposes at least one configurable parameter —
@@ -560,6 +568,11 @@ Rules:
 - Spec detailing private implementation (locks refactoring into the contract).
 - Mixing units/naming with sibling specs (the shared-vocabulary check exists
   for this).
+- Method-argument or result value domains declared outside Interface —
+  allowed values of arguments and results (the input/output contract)
+  live in Interface; allowed values of configurable parameters live in
+  Configuration. A value domain in the wrong section or nowhere is a
+  spec gap.
 - A configurable parameter, named constant, or magic number with no
   Configuration entry — or an entry missing allowed values (type,
   bounds or enum, default, units; the `fixed`/`magic` value for a fixed
