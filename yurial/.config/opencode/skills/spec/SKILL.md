@@ -218,7 +218,8 @@ its single value marked `magic`, no default:
 Numbered requirements, each testable, each with a stable ID — flat (R1) or
 multi-level (R2.1, R4.2.1; nesting groups related requirements). Every
 requirement occupies exactly one line of the spec file. Every requirement is
-one simple declarative sentence. A requirement line declares the rule only —
+written in simple declarative sentences — a line may carry more than one
+sentence, each simple. A requirement line declares the rule only —
 no explanations or rationale inside it; those live in Overview. Every line
 states exactly one behavior feature, uses common language and generally
 accepted terms — local terms only with their interpretation fixed in
@@ -296,9 +297,11 @@ Writing rules:
   "exactly once"): each states what the component does — never a narrative of
   how the code does it. Each line (numbered requirement) describes exactly
   ONE behavior feature: no compound statements bundling several behaviors —
-  split them into separate requirements. A requirement line is one simple
-  sentence: no compound or complex sentences — clauses joined into one
-  sentence are split into separate requirements the same way. A requirement
+  split them into separate requirements. A requirement line may carry more
+  than one sentence. Every sentence is simple and declarative: no compound
+  or complex sentences — clauses joined into one sentence are split into
+  separate sentences (into separate requirements when they state separate
+  behavior features). A requirement
   occupies exactly one line of the spec file: wrapping it onto several lines
   is forbidden, however long the line grows. A requirement line declares
   only — rationale, motivation, and explanations never appear inside it;
@@ -552,9 +555,11 @@ Rules:
 - A requirement wrapped onto several lines of the spec file — one rule, one
   line; wrapping is forbidden however long the line grows (section 4 writing
   rules).
-- A requirement written as a compound or complex sentence — one requirement
-  is one simple sentence; split the clauses into separate requirements
-  (section 4 writing rules).
+- A compound or complex sentence inside a requirement line — every
+  sentence of a requirement is simple; split the joined clauses into
+  separate sentences (into separate requirements when they state separate
+  behavior features); a line may carry several sentences (section 4
+  writing rules).
 - Explanation, rationale, motivation, or an example merged into a requirement
   line — requirement lines declare only; explanations live in Overview and
   examples follow the requirement as their own line or block (section 4).
