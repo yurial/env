@@ -363,8 +363,13 @@ Writing rules:
   IDs) and the section names stable across the project.
 - Language: follow the project's existing spec language; for the first spec in
   a project, use the user's language. Do not mix languages within one file.
-  Terms are the exception: term IDs are always English (full-ID rule above),
-  whatever the spec's language is.
+  No anglicisms: when the spec's language is not English, its prose uses that
+  language's native words — English borrowings are forbidden. A concept
+  lacking a native word is introduced as a defined term (full-ID rule above),
+  not as an ad-hoc borrowing. Two verbatim exceptions: term IDs are always
+  English (full-ID rule above), whatever the spec's language is; and code
+  identifiers and literals (`MAX_RETRIES`, `put(k, v)`, CLI verbs, config
+  keys) are code artifacts, not prose.
 - The spec states the CURRENT requirements only: when requirements change,
   rewrite or delete the obsolete statements — no strikethrough archives inside
   spec files. DEVIATIONS.md (section 6) records only the resulting code-vs-spec
@@ -535,6 +540,10 @@ Rules:
 - Bare or non-English terms: `connection` instead of `yt-core-bus/connection`,
   a translated term, or a prefix naming no reference in the index — the full
   English ID is mandatory at every occurrence (sections 3a, 4).
+- Anglicisms in non-English spec prose: an English borrowing where the
+  spec's language has a native word — use the native word, or introduce
+  the concept as a defined term; the only verbatim English is term IDs
+  and code identifiers/literals (section 4 language rule).
 - Using a term from another spec without listing that spec in Dependencies.
 - specs/GLOSSARY.md out of sync: missing rows for introduced terms, dangling
   rows for deleted references, `Defined in` disagreeing with the term prefix,
