@@ -397,6 +397,19 @@ any format rule updates all three places in the same commit:
   through a baked-in value is a fixed value recorded here, not a
   Constraints entry — Constraints keeps externally imposed budgets and
   invariants.
+- **Behavior requirements cite parameter and argument names, never their
+  values.** When a requirement describes behavior governed by a configurable
+  parameter, a named constant, or an argument, it refers to the identifier —
+  the config key, constant name, or argument name exactly as declared in
+  Interface or Configuration — not to a concrete value. The name is the
+  stable handle: values are re-tuned, differ per deployment, or arrive per
+  call, and a requirement that hard-codes a value silently breaks at the
+  first re-tune. A literal value appears in a requirement only where no name
+  exists to cite yet (a magic number — record it in Configuration) or where
+  the requirement is about that specific value itself (a default, a
+  boundary). Example (user's verbatim wording): `R1.2 При достижении
+  exitTimeout процесс завершается.` — the parameter name `exitTimeout` is
+  cited, not its value (e.g. `30s`).
 - Sections may be collapsed in small specs; keep the header (Status, scope,
   IDs) and the section names stable across the project.
 - Language: follow the project's existing spec language; for the first spec in
@@ -438,8 +451,14 @@ directory) over the changed spec files — and over `specs/index.md` and
 `specs/GLOSSARY.md` when they are touched. It checks the requirement-line
 format (R-ID syntax, group/leaf colon consistency, unique IDs,
 A↔R mirroring), index path existence with valid Status values, and glossary
-alphabetical order with resolvable prefixes. Fix every finding before the
-semantic pass.
+alphabetical order with resolvable prefixes. It also emits a warning (a
+warning-level finding, softer than the format errors above) when a
+requirement line R... cites a literal value (`30 s`) instead of a
+parameter or argument name declared in Interface/Configuration — the
+name is the stable reference; the literal is legitimate only where no
+name exists yet (a magic number) or the requirement is about that value
+itself (a default, a boundary) (section 4 writing rules). Fix every
+finding before the semantic pass.
 
 After editing any spec, run the semantic pass over the *related* specs
 (found via the index, Dependencies sections, and shared vocabulary):
@@ -659,6 +678,11 @@ three places together (section 4 preamble).
   literal records what the code actually carries — a nameless value;
   promoting it to a named constant is a code change, and only then does
   its row become `fixed` keyed by the identifier.
+- A behavior requirement citing a parameter's or argument's value instead
+  of its name ("the process exits after 30 s" where the rule is "on
+  reaching exitTimeout") — values are re-tuned and differ per deployment;
+  the name declared in Interface/Configuration is the stable reference
+  (section 4 writing rules).
 
 ### Structure and scope
 - Spec detailing private implementation (locks refactoring into the contract).
