@@ -8,7 +8,8 @@
 #         recursively).
 #
 # Spec file checks:
-#   - requirement lines match "- R<digits>(.<digits>)*[.] Text";
+#   - requirement lines match "- R<digits>(.<digits>)*[.] Text" — the
+#     ID immediately followed by a period and a space;
 #   - a leaf line ends with '.', a group line ends with ':';
 #   - an ID with children is a group, an ID without children is a leaf;
 #   - requirement IDs are unique; every child's ancestor IDs exist and
@@ -32,27 +33,36 @@
 #     nowhere else: fix the indentation and re-run to surface any
 #     structural findings (duplicate IDs, ancestors) on the newly
 #     visible entry;
-#   - a requirement line citing a literal value — any numeric
-#     literal, with units (30 s, 5 ms, 100%) or bare (3, 0,5) — is
-#     an error: literals are forbidden in requirement lines; cite the
-#     name the spec keys the value under in Interface/Configuration
-#     instead (config key, argument name, fixed-value identifier, or
-#     the spec-chosen semantic name of a magic number). Exempt
-#     (documented in SKILL.md section 5): code literals inside
-#     backticks (`30s`); ID and level tokens whose digit directly
-#     follows a letter or digit (R1.2, A3, L1, v1.2, TLS1.2, UTF-8);
-#     a number glued to a preceding ALL-CAPS word (TLS 1.2); and the
-#     trailing digit of a cited dotted ID followed by its word
-#     (R1.3 minutes, R2.2 states) — an identifier segment, not a
-#     value. The check runs on every requirement line regardless of
-#     which sections the file has.
+#   - a bare numeric literal — a number starting a word: the digits
+#     plus trailing word characters (3x, 30s), decimal-separator
+#     groups included (0,5) — on any line outside the Configuration
+#     and Examples sections is an error: literals are forbidden
+#     outside Configuration and Examples; cite the name the spec keys
+#     the value under in Interface/Configuration instead (config key,
+#     argument name, fixed-value identifier, or the spec-chosen
+#     semantic name of a magic number). Exempt (documented in SKILL.md
+#     section 5): code literals inside backticks (`30s`); lines inside
+#     a fenced code block - a column-0 ``` or ~~~ line toggles the
+#     fence state (the opening marker may carry a language tag):
+#     fenced lines are skipped by the literal scan, and headings
+#     inside a fence never switch the section; words whose
+#     digit directly follows a letter or digit (R1.2, A3, L1, v1.2,
+#     TLS1.2) — including the trailing digit of a cited dotted ID
+#     followed by its word (R1.3 minutes, R2.2 states), an identifier
+#     segment, not a value; and a number glued to a preceding ALL-CAPS
+#     word, hyphen included (TLS 1.2, UTF-8). The section is tracked
+#     by ^#+ headings; heading lines themselves are not scanned, and
+#     inside a fence heading lines do not count at all; the check
+#     runs regardless of which sections the file has.
 # index.md checks:
 #   - row paths exist; Status is draft or stable; Reference is a lowercase
 #     hyphen-separated unique ID.
 # GLOSSARY.md checks:
 #   - term IDs are lowercase <reference>/<term>; alphabetical order;
 #     Defined in equals the term prefix (optionally with requirement IDs);
-#     the prefix resolves against the collected index references.
+#     the prefix resolves against the collected index references — with
+#     none collected, that resolution is skipped with a warning (exit 1
+#     when no errors).
 #
 # Findings go to stderr; warnings carry a "warning:" prefix. Exit status:
 # 0 — clean, 1 — warnings but no errors, 2 — lint errors; a usage error
@@ -60,6 +70,10 @@
 # Known limit: only an indented continuation of a prefixed entry is
 # detected; a non-indented (lazy markdown) continuation is invisible to a
 # line-based lint, and the one-line rule stays partly a review check.
+# Known limit: fence tracking is a blind column-0 toggle - the closing
+# marker is not matched to the opener (length, ``` vs ~~~), an indented
+# fence opener is not recognized, and an unclosed fence suppresses the
+# literal scan and section switching to the end of the file.
 
 set -u
 
@@ -82,6 +96,76 @@ lint_spec() {
         function warn(nr, m) {
             printf "%s:%d: warning: %s\n", FILENAME, nr, m > "/dev/stderr"
             warned = 1
+        }
+        function blank(s,   n, sp) {
+            # replace the last match() span with spaces of equal length
+            sp = ""
+            for (n = 1; n <= RLENGTH; n++) sp = sp " "
+            return substr(s, 1, RSTART - 1) sp substr(s, RSTART + RLENGTH)
+        }
+        # Fenced code blocks: a column-0 ``` or ~~~ line toggles the
+        # in-fence state; the opening marker may carry a language tag
+        # on the same line (```sh, ~~~markdown) - the tag never breaks
+        # the toggle. A fence boundary is a structural line like a
+        # heading: it resets pend. Inside a fence the content is
+        # verbatim: heading lines do not switch the section, and the
+        # literal scan skips every line.
+        /^(```|~~~)/ {
+            infence = !infence
+            pend = ""
+            next
+        }
+        # The current section: the innermost ^#+ heading, taken as its
+        # first alphabetic word ("## 1b. Foo" -> ""). Heading lines
+        # define the section context and are not scanned for literals;
+        # they reset pend (a heading is never an indented continuation,
+        # and it ends the reach of the previous entry). Headings inside
+        # a fence do not run: an in-fence # line is verbatim content,
+        # not a heading.
+        !infence && /^#+[ \t]/ {
+            cursec = $0
+            sub(/^#+[ \t]*/, "", cursec)
+            sub(/[^A-Za-z].*$/, "", cursec)
+            pend = ""
+            next
+        }
+        # Universal bare-numeric-literal scan: every non-heading,
+        # non-fenced line outside the Configuration and Examples
+        # sections. A word is a
+        # run of [A-Za-z0-9_] optionally continued by .digit or ,digit
+        # groups (R1.2, v1.2, 0,5); a word that STARTS with a digit
+        # sits at a word boundary (line start or a non-word character
+        # before it): a bare numeric literal, its token the digits plus
+        # trailing word characters (30s, 3x) and decimal-separator
+        # groups. Words starting with a letter never match by
+        # construction: their digit follows a letter or digit (the
+        # master f7e5a21 FP rules for R1.2, A3, L1, v1.2, TLS1.2, and
+        # the trailing digit of a cited dotted ID followed by its
+        # word, R1.3 minutes). The remaining FP rule is
+        # post-filtered: a number glued to a preceding ALL-CAPS word,
+        # hyphen included (TLS 1.2, UTF-8) — the character directly
+        # before the token plus optional spaces/tabs before it must
+        # end in an ALL-CAPS word for the exemption to apply. Lines
+        # inside a fenced code block are skipped here (in-fence state
+        # above): fenced content is code, not spec prose.
+        !infence && cursec != "Configuration" && cursec != "Examples" {
+            line = " " $0 " "
+            # numbers inside backticks are code literals: blank the spans
+            while (match(line, /`[^`]*`/)) line = blank(line)
+            n = length(line)
+            i = 1
+            while (i <= n) {
+                if (substr(line, i, 1) !~ /[A-Za-z0-9_]/) { i++; continue }
+                j = i
+                while (j <= n && substr(line, j, 1) ~ /[A-Za-z0-9_]/) j++
+                while (j < n && (substr(line, j, 1) == "." || substr(line, j, 1) == ",") && substr(line, j + 1, 1) ~ /[0-9]/) {
+                    j++
+                    while (j <= n && substr(line, j, 1) ~ /[A-Za-z0-9_]/) j++
+                }
+                if (substr(line, i, 1) ~ /[0-9]/ && substr(line, 1, i - 2) !~ /[A-Z][A-Z]+[ \t]*$/)
+                    err(NR, (cursec == "" ? "spec file" : cursec " section") " contains a bare numeric literal (" substr(line, i, j - i) ") - forbidden outside Configuration and Examples; cite the name the spec keys the value under in Interface/Configuration")
+                i = j
+            }
         }
         # One-line rule: a prefixed entry (R/A/V/T/J) must not continue onto
         # an indented next line. Flat-list rule: a line that is itself an
@@ -121,7 +205,7 @@ lint_spec() {
             # punctuation, duplicate ID) so that a wrapped continuation
             # of an already-erroring line is still diagnosed as its wrap.
             pend = "R" id; pendnr = NR
-            if (substr(tail, 1, 1) != ".") {
+            if (substr(tail, 1, 2) != ". ") {
                 err(NR, "requirement ID must be followed by a period and a space")
                 next
             }
@@ -132,29 +216,10 @@ lint_spec() {
             }
             seen[key] = substr($0, length($0), 1)
             ln[key] = NR
-            # Literal-value scan: any numeric literal - with units or
-            # bare - inside the padded tail (padding replaces ^|$
-            # boundaries; unit alternatives longest-first, mawk picks
-            # the first matching alternative). Unconditional,
-            # error-level: literals are forbidden in requirement lines
-            # whatever sections the file has. Code literals in
-            # backticks are stripped before the scan; a match is
-            # post-filtered when it is an identifier segment, not a
-            # value: its digit follows the dot of a dotted ID-like
-            # token (R1.3 minutes -> the "3" belongs to R1.3), or the
-            # number is glued to a preceding ALL-CAPS word (TLS 1.2).
-            tgt = " " tail " "
-            gsub(/`[^`]*`/, " ", tgt)
-            restl = tgt
-            while (match(restl, /[^A-Za-z0-9][0-9]+([.,][0-9]+)?([ \t]?(seconds|second|secs|sec|us|ns|ms|s|minutes|minute|mins|min|hours|hour|hrs|hr|h|days|day|bytes|Bytes|byte|Byte|KiB|MiB|GiB|TiB|kB|KB|MB|GB|TB|B|мкс|мс|сек|мин|%))?[^A-Za-z0-9]/)) {
-                pre = substr(restl, 1, RSTART - 1)
-                c = substr(restl, RSTART, 1)
-                if (!((c == "." && pre ~ /[A-Za-z]?[0-9.]+$/) || pre ~ /[A-Z][A-Z]+[ \t]*$/)) {
-                    err(NR, "requirement R" id " cites a literal value (" substr(restl, RSTART + 1, RLENGTH - 2) ") - forbidden, cite the name the spec keys the value under in Interface/Configuration")
-                    break
-                }
-                restl = substr(restl, RSTART + RLENGTH - 1)
-            }
+            # The bare-numeric-literal scan is universal (see the
+            # section-tracking block above): every line outside the
+            # Configuration and Examples sections is scanned there,
+            # requirement lines included.
         }
         /^- A[0-9]+(\.[0-9]+)*\./ {
             aid = $0; sub(/^- A/, "", aid); sub(/[^0-9.].*$/, "", aid); sub(/\.$/, "", aid)
@@ -297,7 +362,7 @@ lint_glossary() {
         checkrefs=1
     else
         checkrefs=0
-        printf 'speclint: %s: no index references collected (lint an index.md first); prefix resolution skipped\n' "$1" >&2
+        printf 'speclint: %s: warning: no index references collected (lint an index.md first); prefix resolution skipped\n' "$1" >&2
     fi
     awk -v REFFILE="$refsrc" -v CHECKREFS="$checkrefs" '
         function trim(s) { gsub(/^[ \t]+|[ \t]+$/, "", s); return s }
@@ -333,6 +398,11 @@ lint_glossary() {
         END { exit bad ? 2 : 0 }
     ' "$1"
     rc=$?
+    # A glossary linted without collected references emits a warning;
+    # warnings alone yield exit 1 (the documented 0/1/2 contract).
+    if [ "$checkrefs" -eq 0 ] && [ "$rc" -eq 0 ]; then
+        rc=1
+    fi
     if [ "$rc" -gt "$fail" ]; then fail=$rc; fi
 }
 
