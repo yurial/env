@@ -22,10 +22,20 @@
 #     justification IDs are unique;
 #   - a prefixed entry (R, A, V, T, J) must not continue onto an indented
 #     next line: one entry occupies exactly one line;
+#   - prefixed entries form a flat list: a line that is itself indented
+#     prefixed entry (matching leading whitespace + "- R2.1." style)
+#     is an error - hierarchy is expressed by multi-level IDs only,
+#     never by markdown nesting. An indented child still counts as a
+#     child for the group/leaf consistency checks, but is registered
+#     nowhere else: fix the indentation and re-run to surface any
+#     structural findings (duplicate IDs, ancestors) on the newly
+#     visible entry;
 #   - a requirement line citing a literal value (a number with
 #     units, e.g. 30 s, 5 ms, 100%) is an error — literals are
-#     forbidden in requirement lines; cite the parameter or argument
-#     name declared in Interface/Configuration instead. The check runs
+#     forbidden in requirement lines; cite the name the spec keys the
+#     value under in Interface/Configuration instead (config key,
+#     argument name, fixed-value identifier, or the spec-chosen
+#     semantic name of a magic number). The check runs
 #     on every requirement line regardless of which sections the file
 #     has.
 # index.md checks:
@@ -66,9 +76,26 @@ lint_spec() {
             warned = 1
         }
         # One-line rule: a prefixed entry (R/A/V/T/J) must not continue onto
-        # an indented next line. This block runs first for every line; the
-        # entry blocks below set pend for the next line to check.
+        # an indented next line. Flat-list rule: a line that is itself an
+        # indented prefixed entry violates the flat list - hierarchy is
+        # expressed by multi-level IDs only. This block runs first for every
+        # line; the entry blocks below set pend for the next line to check.
         {
+            if ($0 ~ /^[ \t]+- [RAVTJ][0-9]/) {
+                cid = $0
+                sub(/^[ \t]+- /, "", cid)
+                fam = substr(cid, 1, 1)
+                sub(/^[RAVTJ]/, "", cid)
+                sub(/[^0-9.].*$/, "", cid)
+                sub(/\.$/, "", cid)
+                err(NR, "prefixed entries must be a flat list - indented child entry \"" fam cid "\" found; express hierarchy via multi-level IDs")
+                # only R-family children take part in the R group/leaf
+                # structure; seen keys are "." + numeric ID (no letter).
+                if (fam == "R")
+                    indented["." cid] = 1
+                pend = ""
+                next
+            }
             if (pend != "" && $0 ~ /^[ \t]+/)
                 err(pendnr, "entry " pend " is wrapped onto the next line - one entry occupies exactly one line, wrapping is forbidden")
             pend = ""
@@ -93,7 +120,7 @@ lint_spec() {
             # Unconditional, error-level: literals are forbidden in
             # requirement lines whatever sections the file has.
             if (match(" " tail " ", /([^A-Za-z0-9])[0-9]+([.,][0-9]+)?[ \t]?(seconds|second|secs|sec|us|ns|ms|s|minutes|minute|mins|min|hours|hour|hrs|hr|h|days|day|bytes|Bytes|byte|Byte|KiB|MiB|GiB|TiB|kB|KB|MB|GB|TB|B|мкс|мс|сек|мин|%)([^A-Za-z0-9])/))
-                err(NR, "requirement R" id " cites a literal value (" substr(" " tail " ", RSTART + 1, RLENGTH - 2) ") - forbidden, cite the parameter or argument name declared in Interface/Configuration")
+                err(NR, "requirement R" id " cites a literal value (" substr(" " tail " ", RSTART + 1, RLENGTH - 2) ") - forbidden, cite the name the spec keys the value under in Interface/Configuration")
         }
         /^- A[0-9]+(\.[0-9]+)*\./ {
             aid = $0; sub(/^- A/, "", aid); sub(/[^0-9.].*$/, "", aid); sub(/\.$/, "", aid)
@@ -150,6 +177,13 @@ lint_spec() {
                 haschild = 0
                 for (j in seen)
                     if (j != k && index(j, k ".") == 1) { haschild = 1; break }
+                # an indented child (flat-list violation) still counts as
+                # a child: the flat-list error already flags it, the
+                # group/leaf consistency must not pile a second,
+                # misleading finding on top.
+                if (!haschild)
+                    for (j in indented)
+                        if (index(j, k ".") == 1) { haschild = 1; break }
                 if (seen[k] == ":" && !haschild)
                     err(ln[k], "group ID R" substr(k, 2) " has no children")
                 if (seen[k] == "." && haschild)

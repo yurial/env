@@ -205,21 +205,25 @@ the error codes, never their enumeration.
 Mandatory when the component has configurable parameters, named
 constants, or magic numbers (writing rule below); omit the section only
 if it has none of the three. One row per entry — allowed values and
-effect. Three kinds of rows, always distinguishable: a parameter (keyed
-by config key; type/bounds/enum/step, default, effect); a named
-constant — a value baked into the code under an identifier
-(`MAX_RETRIES`) — keyed by that identifier, its single value with units
-marked `fixed`, no default; and a magic number — a bare literal in the
-code with no identifier (`3`, `60000`) — keyed by the literal with
-units plus the behavior it participates in (there is no name to cite),
-its single value marked `magic`, no default:
+effect. Three kinds of rows, always distinguishable, every row keyed by
+a name, never by a value: a parameter (keyed by config key;
+type/bounds/enum/step, default, effect); a named constant — a value
+baked into the code under an identifier (`MAX_RETRIES`) — keyed by that
+identifier, its single value with units marked `fixed`, no default; and
+a magic number — a bare literal in the code with no identifier (`3`,
+`60000`) — keyed by a semantic name chosen in the spec, lowercase
+hyphenated like a reference ID (e.g. `batch-timeout-cap`); the name
+exists in the spec only, never in the code — the row's value notes that
+the code carries a nameless literal, which is what distinguishes `magic`
+from `fixed` — and its single value with units is marked `magic`, no
+default:
 
 | Name | Allowed values | Default | Effect |
 |---|---|---|---|
 | `batch_timeout` | integer, 0..60000 ms, step 100 | 100 ms | Coalescing window (R4); at 0 coalescing is disabled; above 10000 ms the window fills only when `max_batch_size` >= 2 |
 | `mode` | enum: strict, lenient | strict | `strict` rejects unknown keys (R7); `lenient` logs and skips them |
 | `MAX_RETRIES` | `fixed` 3 attempts | — | Delivery retries before dead-lettering (R3) |
-| `60000` ms, `batch_timeout` upper bound | `magic` 60000 ms | — | Values above 60000 ms are rejected as out of range (R4) |
+| `batch-timeout-cap` | `magic` 60000 ms (nameless literal in the code) | — | Upper bound of `batch_timeout`; values above it are rejected as out of range (R4) |
 
 ## Requirements
 Sequencing rules, ordering guarantees, algorithm semantics (steps or
@@ -228,7 +232,11 @@ has a stable ID — flat (R1) or multi-level (R2.1, R4.2.1). Every leaf
 requirement is testable. An ID with children is a group, not a requirement:
 its line is a caption ending with a colon, states no behavior, and names
 what its children govern. Every requirement occupies exactly one line of
-the spec file. Every requirement is written in declarative sentences; a
+the spec file. The requirements form a flat list: every entry line
+starts at the left margin, and a child (R2.1) is never indented under
+its parent (R2) — the multi-level ID alone expresses the hierarchy,
+never markdown nesting. Every requirement is written in declarative
+sentences; a
 line may carry more than one sentence, each without joined independent
 clauses and with at most one subordinate condition or time clause. A
 requirement line declares the rule only — no explanations or rationale
@@ -355,7 +363,11 @@ any format rule updates all three places in the same commit:
   (R), an Examples entry (A), a Verification entry (V), a Tests entry (T),
   a Justification entry (J) — occupies exactly one line of the spec file:
   wrapping it onto several lines is forbidden, however long the line
-  grows. A requirement line declares only — rationale, motivation,
+  grows. Prefixed entries form a flat list: every entry line starts at
+  the left margin, indentation before an entry is forbidden, and a
+  child entry (R2.1) is never nested under its parent (R2) — the
+  multi-level ID alone expresses the hierarchy, never markdown
+  nesting. A requirement line declares only — rationale, motivation,
   explanations, and examples never appear inside it; Overview carries the
   system-level purpose, the Examples section carries per-requirement
   examples and explanations, the Justification section carries
@@ -405,13 +417,17 @@ any format rule updates all three places in the same commit:
   one entry per parameter or fixed value; a spec without the section
   asserts the component has none of them — no parameters, no named
   constants, no magic numbers — and the small-spec section collapse
-  does not waive it. Fixed values come in two kinds, distinguishable in
-  the table: a named constant — the value lives in the code under an
-  identifier (`MAX_RETRIES`) — keyed by that identifier, its single
-  value with units marked `fixed`, no default; and a magic number — a
-  bare literal with no identifier (`3`, `60000`) — keyed by the literal
-  with units plus the behavior it participates in (there is no name to
-  cite), its single value marked `magic`, no default. Each entry
+  does not waive it. Every row is keyed by a name, never by a value.
+  Fixed values come in two kinds, distinguishable in the table: a named
+  constant — the value lives in the code under an identifier
+  (`MAX_RETRIES`) — keyed by that identifier, its single value with
+  units marked `fixed`, no default; and a magic number — a bare
+  literal with no identifier (`3`, `60000`) — keyed by a semantic name
+  chosen in the spec, lowercase hyphenated like a reference ID (e.g.
+  `batch-timeout-cap`); the name lives in the spec only, never in the
+  code, and the row notes that the code carries a nameless literal —
+  that is what distinguishes `magic` from `fixed` — with its single
+  value marked `magic`, no default. Each entry
   states: (a) allowed values — for a parameter: type, range bounds or
   enum members, discreteness (step), default, units where applicable;
   for a fixed value of either kind: its single value with units and its
@@ -425,17 +441,20 @@ any format rule updates all three places in the same commit:
   through a baked-in value is a fixed value recorded here, not a Usage
   constraints entry — Usage constraints keeps externally imposed budgets
   and applicability bounds, never self-enforced limits.
-- **Requirements cite parameter and argument names, never their
-  values.** When a requirement describes behavior governed by a configurable
-  parameter, a named constant, or an argument, it refers to the identifier —
-  the config key, constant name, or argument name exactly as declared in
+- **Requirements cite names, never their values.** When a requirement
+  describes behavior governed by a configurable parameter, a named
+  constant, a magic number, or an argument, it refers to the name — the
+  config key, constant identifier, argument name, or the spec-chosen
+  semantic name of a magic number, exactly as the spec keys it in
   Interface or Configuration — not to a concrete value. The name is the
   stable handle: values are re-tuned, differ per deployment, or arrive per
   call, and a requirement that hard-codes a value silently breaks at the
-  first re-tune. A literal value never appears in a requirement line: a
-  magic number is first recorded in Configuration and the requirement
-  cites that entry; a default or a boundary is a fact about the
-  parameter, carried by its Configuration row, not by the requirement.
+  first re-tune. A literal value never appears in a requirement line:
+  a magic number is first recorded in Configuration, keyed by its
+  spec-chosen semantic name, and the requirement cites that name (e.g.
+  `batch-timeout-cap`), never the literal; a default or a boundary is
+  a fact about the parameter, carried by its Configuration row, not by
+  the requirement.
   The mechanical lint (section 5) enforces this as an unconditional
   error on every requirement line. Example (user's verbatim wording):
   `R1.2 При достижении
@@ -492,12 +511,17 @@ format — R-ID syntax, group/leaf colon consistency, unique IDs, A↔R
 mirroring; V-ID, T-ID, and J-ID syntax with unique IDs per family; leaf
 Tests entries citing the R-IDs they cover; the one-line rule for R, A, V,
 T, and J entries (an entry continuing onto an indented next line is an
-error) — plus index path existence with valid Status values, and glossary
+error); the flat-list rule — prefixed entries form a flat list without
+indentation or nested children, an indented child entry is an error,
+and hierarchy is expressed by multi-level IDs only — plus index path
+existence with valid Status values, and glossary
 alphabetical order with resolvable prefixes. It also reports an error
 when a requirement line R... cites a literal value — a number with
 units, e.g. `30 s`: literals are forbidden in requirement lines; cite
-the parameter or argument name declared in Interface/Configuration
-(section 4 writing rules). The check runs on every requirement line,
+the name the spec keys the value under in Interface/Configuration — a
+config key, argument name, fixed-value identifier, or the spec-chosen
+semantic name of a magic number (section 4 writing rules). The check
+runs on every requirement line,
 unconditionally — a spec without Interface or Configuration sections
 gets the same error. Configuration table rows and Examples (A-)entries
 are not scanned: they are different line families, and the concrete
@@ -689,6 +713,10 @@ three places together (section 4 preamble).
   wrapped onto several lines of the spec file — one entry, one line;
   wrapping is forbidden however long the line grows (section 4 writing
   rules).
+- A prefixed entry indented to nest it under its parent (a child R2.1
+  markdown-nested under R2) — prefixed entries form a flat list; the
+  multi-level ID alone expresses the hierarchy, never indentation
+  (section 4 writing rules).
 - Joined independent clauses or a stack of subordinate clauses inside a
   requirement sentence — split the independent clauses into separate
   sentences (into separate requirements when they state separate behavior
@@ -732,16 +760,19 @@ three places together (section 4 preamble).
   value) or the behavioral effect — is an undocumented knob or buried
   magic number and a spec gap (section 4).
 - Conflating the two fixed-value kinds: a magic number recorded as
-  `fixed` under a name the code does not have (or a named constant
-  demoted to a nameless literal row). A `magic` row keyed by the
-  literal records what the code actually carries — a nameless value;
-  promoting it to a named constant is a code change, and only then does
-  its row become `fixed` keyed by the identifier.
-- A requirement citing a parameter's or argument's value instead
-  of its name ("the process exits after 30 s" where the rule is "on
-  reaching exitTimeout") — values are re-tuned and differ per deployment;
-  the name declared in Interface/Configuration is the stable reference
-  (section 4 writing rules).
+  `fixed` (the code carries a nameless literal, not an identifier), or
+  a named constant demoted to a `magic` row. A `magic` row is keyed by
+  a semantic name chosen in the spec, and its value notes the nameless
+  literal the code actually carries — the name lives in the spec only;
+  promoting the literal to a named constant is a code change, and only
+  then does its row become `fixed` keyed by the code identifier.
+- A requirement citing a value instead of the name the spec keys it
+  under ("the process exits after 30 s" where the rule is "on reaching
+  exitTimeout"; "above 60000 ms" where the rule is "above
+  `batch-timeout-cap`") — values are re-tuned and differ per
+  deployment; the name declared in Interface/Configuration (a code
+  identifier, or the spec-chosen semantic name for a magic number) is
+  the stable reference (section 4 writing rules).
 
 ### Structure and scope
 - Spec detailing private implementation (locks refactoring into the contract).
