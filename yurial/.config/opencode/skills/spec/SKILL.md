@@ -265,10 +265,12 @@ requirements, and occupies exactly one line:
 
 ## Tests
 Optional; present when requirements are covered by recorded tests. One
-entry per test — a stable ID, flat (T1) or multi-level (T1.1), same
-rules as R-IDs: unique, never renumbered; an ID with children is a group
-caption ending with a colon; a leaf entry cites the requirement IDs it
-covers. One entry occupies exactly one line, however long:
+entry per test — a stable ID, flat (T1) or multi-level (T1.1), same ID
+syntax rules as R-IDs (unique, never renumbered, multi-level; not the
+R trailing-punctuation rule — it applies to R entries only); an ID with
+children is a group caption ending with a colon; a leaf entry cites the
+requirement IDs it covers, and every cited R-ID names an existing
+requirement. One entry occupies exactly one line, however long:
 - T1. Key expiry:
 - T1.1. get-expired-key returns NOT_FOUND (R3)
 - T1.2. last-write restarts the expiry clock (R2.2)
@@ -284,9 +286,9 @@ Requirements, self-enforced baked-in limits in Configuration.
 Optional; present when the rationale behind chosen defaults, algorithm
 details, or formulas exists and matters; absent otherwise. One entry per
 justified decision, a stable ID — flat (J1) or multi-level (J2.1), same
-rules as R-IDs: unique, never renumbered. An entry is prose citing the
-requirement or configuration IDs it justifies and occupies exactly one
-line:
+ID syntax rules as R-IDs (unique, never renumbered, multi-level). An
+entry is prose citing the requirement or configuration IDs it justifies
+and occupies exactly one line:
 - J1. Why `batch_timeout` defaults to 100 ms: the coalescing window of R4 must cover the median RPC burst (~60 ms) yet close within the 150 ms latency budget.
 
 ## Error handling
@@ -311,8 +313,9 @@ change, same commit:
 
 ## Verification
 One entry per verified algorithm, each with a stable ID — flat (V1) or
-multi-level (V2.1), same rules as R-IDs: unique, never renumbered, a
-citation covering the ID with its whole subtree. A spec may describe
+multi-level (V2.1), same ID syntax rules as R-IDs (unique, never
+renumbered, multi-level), a citation covering the ID with its whole
+subtree. A spec may describe
 several algorithms — always name the exact one. Recorded when the
 algorithm is checked with TLC/TLAPS; see the tla-plus / tlaps skills for
 run rules. One entry occupies exactly one line, however long; fields are
@@ -383,10 +386,11 @@ any format rule updates all three places in the same commit:
   retirement in DEVIATIONS.md) instead. The same scheme governs the other
   prefixed entry families — Examples (Ax.y), Verification (Vx.y), Tests
   (Tx.y), Justification (Jx.y): IDs unique per family, never renumbered,
-  multi-level allowed.
-  Multi-level IDs (Rx.y.z, any depth)
-  are allowed; every ID at every level is unique, and the no-renumbering
-  and retirement rules apply to every level equally. An ID with children is
+  multi-level allowed (Rx.y.z, any depth; every ID at every level unique,
+  with the no-renumbering and retirement rules applying to every level
+  equally). What the families share is this ID syntax only — the R
+  trailing-punctuation rule (a leaf line ends with a period, a group line
+  with a colon) applies to R entries alone. An ID with children is
   a group, not a requirement: its line is a caption ending with a colon and
   states no behavior. A citation of an ID covers it together with its whole
   subtree; an ID range (R3-R7) covers every ID between its endpoints,
@@ -456,10 +460,12 @@ any format rule updates all three places in the same commit:
   a fact about the parameter, carried by its Configuration row, not by
   the requirement.
   The mechanical lint (section 5) enforces this as an unconditional
-  error on every requirement line. Example (user's verbatim wording):
-  `R1.2 При достижении
-  exitTimeout процесс завершается.` — the parameter name `exitTimeout` is
-  cited, not its value (e.g. `30s`).
+  error on every requirement line: any numeric literal — with units
+  (`30 s`, `100%`) or bare (`3`, `0,5`) — is flagged. Example (user's
+  verbatim wording):
+   `R1.2 При достижении
+   exitTimeout процесс завершается.` — the parameter name `exitTimeout` is
+   cited, not its value (e.g. `30s`).
 - Sections may be collapsed in small specs; keep the header (Status, scope,
   IDs) and the section names stable across the project.
 - Language: follow the project's existing spec language; for the first spec in
@@ -478,7 +484,8 @@ any format rule updates all three places in the same commit:
 - **Verification entries (template section above)**: a spec section that
   describes algorithms gets a `Verification` section when any of them is
   checked with a formal tool. Each entry carries a stable ID — flat (V1)
-  or multi-level (V2.1), same rules as R-IDs — and occupies exactly one
+  or multi-level (V2.1), same ID syntax rules as R-IDs (unique, never
+  renumbered, multi-level) — and occupies exactly one
   line, its fields separated by semicolons (template above). Rules:
   - Name the exact algorithm (never "the algorithm" when the spec defines
     several); cite its requirement IDs.
@@ -497,9 +504,10 @@ any format rule updates all three places in the same commit:
     that no longer exists is worse than no entry.
 - **Tests entries (template section above)**: when requirements are covered
   by recorded tests, the spec carries a Tests section with one entry per
-  test: a stable ID — flat (T1) or multi-level (T1.1), same rules as R-IDs
-  (unique, never renumbered; a group ID is a caption ending with a colon) —
-  citing the requirement IDs it covers; one entry per line (one-line rule
+  test: a stable ID — flat (T1) or multi-level (T1.1), same ID syntax
+  rules as R-IDs (unique, never renumbered, multi-level; a group ID is
+  a caption ending with a colon) — citing the requirement IDs it covers,
+  each naming an existing requirement; one entry per line (one-line rule
   above). A test per requirement ID is the default expectation (section 7).
 
 ## 5. Post-change consistency check (always, before implementing)
@@ -509,21 +517,29 @@ directory) over the changed spec files — and over `specs/index.md` and
 `specs/GLOSSARY.md` when they are touched. It checks the prefixed-entry
 format — R-ID syntax, group/leaf colon consistency, unique IDs, A↔R
 mirroring; V-ID, T-ID, and J-ID syntax with unique IDs per family; leaf
-Tests entries citing the R-IDs they cover; the one-line rule for R, A, V,
-T, and J entries (an entry continuing onto an indented next line is an
-error); the flat-list rule — prefixed entries form a flat list without
-indentation or nested children, an indented child entry is an error,
-and hierarchy is expressed by multi-level IDs only — plus index path
-existence with valid Status values, and glossary
-alphabetical order with resolvable prefixes. It also reports an error
-when a requirement line R... cites a literal value — a number with
-units, e.g. `30 s`: literals are forbidden in requirement lines; cite
+Tests entries citing the R-IDs they cover, with every cited R-ID
+(ID-range endpoints included, e.g. `R3-R7`) naming an existing
+requirement; the one-line rule for R, A, V, T, and J entries (an entry
+continuing onto an indented next line is an error, including a
+continuation of a line that already carries an ID error); the flat-list
+rule — prefixed entries form a flat list without indentation or nested
+children, an indented child entry is an error, and hierarchy is
+expressed by multi-level IDs only — plus index path existence with
+valid Status values, and glossary alphabetical order with resolvable
+prefixes. It also reports an error when a requirement line R... cites
+a literal value — any numeric literal, with units (`30 s`, `100%`) or
+bare (`3`, `0,5`): literals are forbidden in requirement lines; cite
 the name the spec keys the value under in Interface/Configuration — a
 config key, argument name, fixed-value identifier, or the spec-chosen
-semantic name of a magic number (section 4 writing rules). The check
-runs on every requirement line,
-unconditionally — a spec without Interface or Configuration sections
-gets the same error. Configuration table rows and Examples (A-)entries
+semantic name of a magic number (section 4 writing rules). The
+exemptions are narrow and mechanical: code literals inside backticks
+(`30s`); ID and level tokens whose digit directly follows a letter or
+digit (R1.2, A3, L1, v1.2, TLS1.2, UTF-8); a number glued to a
+preceding ALL-CAPS word (TLS 1.2); and the trailing digit of a cited
+dotted ID followed by its word (R1.3 minutes, R2.2 states) — an
+identifier segment, not a value. The check runs on every requirement
+line, unconditionally — a spec without Interface or Configuration
+sections gets the same error. Configuration table rows and Examples (A-)entries
 are not scanned: they are different line families, and the concrete
 values they carry are exempt by construction; prose outside requirement
 lines is likewise not scanned. Exit status: 0 — clean, 1 — warnings
@@ -737,9 +753,11 @@ three places together (section 4 preamble).
 - An Ax.y Examples entry with no matching Rx.y — a dangling explanation;
   delete it or re-point it when the requirement retires (section 4).
 - Recorded test entries with no stable T-ID, or a Tests entry citing no
-  requirement R-ID — a test tracing to no requirement verifies nothing
-  spec-backed; give it a T-ID and the R-IDs it covers, or drop it
-  (section 4).
+  live requirement R-ID — no R-ID cited at all, or a cited R-ID naming
+  no existing requirement — a dangling test tracing to no live
+  requirement verifies nothing spec-backed; give it a T-ID and the
+  R-IDs it covers, re-point it when the covered requirement retires,
+  or drop it (section 4).
 - Undefined local terms in requirements: project jargon or ad-hoc names whose
   interpretation is fixed nowhere — no Definitions entry, no GLOSSARY.md row;
   requirement lines may use common terms and defined full-ID terms only

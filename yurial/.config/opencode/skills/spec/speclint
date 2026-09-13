@@ -17,7 +17,9 @@
 #   - verification lines match "- V<digits>(.<digits>)*[.] Text" and
 #     verification IDs are unique;
 #   - tests lines match "- T<digits>(.<digits>)*[.] Text", test IDs are
-#     unique, and every leaf Tests entry cites a requirement R-ID;
+#     unique, every leaf Tests entry cites a requirement R-ID, and
+#     every R-ID cited by a Tests entry (ID-range endpoints included,
+#     e.g. R3-R7) names an existing requirement;
 #   - justification lines match "- J<digits>(.<digits>)*[.] Text" and
 #     justification IDs are unique;
 #   - a prefixed entry (R, A, V, T, J) must not continue onto an indented
@@ -30,14 +32,20 @@
 #     nowhere else: fix the indentation and re-run to surface any
 #     structural findings (duplicate IDs, ancestors) on the newly
 #     visible entry;
-#   - a requirement line citing a literal value (a number with
-#     units, e.g. 30 s, 5 ms, 100%) is an error — literals are
-#     forbidden in requirement lines; cite the name the spec keys the
-#     value under in Interface/Configuration instead (config key,
-#     argument name, fixed-value identifier, or the spec-chosen
-#     semantic name of a magic number). The check runs
-#     on every requirement line regardless of which sections the file
-#     has.
+#   - a requirement line citing a literal value — any numeric
+#     literal, with units (30 s, 5 ms, 100%) or bare (3, 0,5) — is
+#     an error: literals are forbidden in requirement lines; cite the
+#     name the spec keys the value under in Interface/Configuration
+#     instead (config key, argument name, fixed-value identifier, or
+#     the spec-chosen semantic name of a magic number). Exempt
+#     (documented in SKILL.md section 5): code literals inside
+#     backticks (`30s`); ID and level tokens whose digit directly
+#     follows a letter or digit (R1.2, A3, L1, v1.2, TLS1.2, UTF-8);
+#     a number glued to a preceding ALL-CAPS word (TLS 1.2); and the
+#     trailing digit of a cited dotted ID followed by its word
+#     (R1.3 minutes, R2.2 states) — an identifier segment, not a
+#     value. The check runs on every requirement line regardless of
+#     which sections the file has.
 # index.md checks:
 #   - row paths exist; Status is draft or stable; Reference is a lowercase
 #     hyphen-separated unique ID.
@@ -79,7 +87,13 @@ lint_spec() {
         # an indented next line. Flat-list rule: a line that is itself an
         # indented prefixed entry violates the flat list - hierarchy is
         # expressed by multi-level IDs only. This block runs first for every
-        # line; the entry blocks below set pend for the next line to check.
+        # line and clears pend; the entry blocks below then set pend for the
+        # next line to check - on every path, including their early-error
+        # paths (malformed ID punctuation, duplicate ID), so a wrapped
+        # continuation is always attributed to the line that started it.
+        # The flat-list branch clears pend explicitly: an indented child
+        # entry already carries the flat-list error and must not also be
+        # reported as a wrap of its parent.
         {
             if ($0 ~ /^[ \t]+- [RAVTJ][0-9]/) {
                 cid = $0
@@ -103,6 +117,10 @@ lint_spec() {
         /^- R[0-9]+(\.[0-9]+)*[ .:]/ {
             id = $0; sub(/^- R/, "", id); sub(/[^0-9.].*$/, "", id); sub(/\.$/, "", id)
             tail = $0; sub(/^- R[0-9]+(\.[0-9]+)*/, "", tail)
+            # pend is set before the early-error paths (malformed ID
+            # punctuation, duplicate ID) so that a wrapped continuation
+            # of an already-erroring line is still diagnosed as its wrap.
+            pend = "R" id; pendnr = NR
             if (substr(tail, 1, 1) != ".") {
                 err(NR, "requirement ID must be followed by a period and a space")
                 next
@@ -112,15 +130,31 @@ lint_spec() {
                 err(NR, "duplicate requirement ID R" id)
                 next
             }
-            pend = "R" id; pendnr = NR
             seen[key] = substr($0, length($0), 1)
             ln[key] = NR
-            # Literal-value scan: a number with units inside the padded tail
-            # (padding replaces ^|$ boundaries; alternatives longest-first).
-            # Unconditional, error-level: literals are forbidden in
-            # requirement lines whatever sections the file has.
-            if (match(" " tail " ", /([^A-Za-z0-9])[0-9]+([.,][0-9]+)?[ \t]?(seconds|second|secs|sec|us|ns|ms|s|minutes|minute|mins|min|hours|hour|hrs|hr|h|days|day|bytes|Bytes|byte|Byte|KiB|MiB|GiB|TiB|kB|KB|MB|GB|TB|B|мкс|мс|сек|мин|%)([^A-Za-z0-9])/))
-                err(NR, "requirement R" id " cites a literal value (" substr(" " tail " ", RSTART + 1, RLENGTH - 2) ") - forbidden, cite the name the spec keys the value under in Interface/Configuration")
+            # Literal-value scan: any numeric literal - with units or
+            # bare - inside the padded tail (padding replaces ^|$
+            # boundaries; unit alternatives longest-first, mawk picks
+            # the first matching alternative). Unconditional,
+            # error-level: literals are forbidden in requirement lines
+            # whatever sections the file has. Code literals in
+            # backticks are stripped before the scan; a match is
+            # post-filtered when it is an identifier segment, not a
+            # value: its digit follows the dot of a dotted ID-like
+            # token (R1.3 minutes -> the "3" belongs to R1.3), or the
+            # number is glued to a preceding ALL-CAPS word (TLS 1.2).
+            tgt = " " tail " "
+            gsub(/`[^`]*`/, " ", tgt)
+            restl = tgt
+            while (match(restl, /[^A-Za-z0-9][0-9]+([.,][0-9]+)?([ \t]?(seconds|second|secs|sec|us|ns|ms|s|minutes|minute|mins|min|hours|hour|hrs|hr|h|days|day|bytes|Bytes|byte|Byte|KiB|MiB|GiB|TiB|kB|KB|MB|GB|TB|B|мкс|мс|сек|мин|%))?[^A-Za-z0-9]/)) {
+                pre = substr(restl, 1, RSTART - 1)
+                c = substr(restl, RSTART, 1)
+                if (!((c == "." && pre ~ /[A-Za-z]?[0-9.]+$/) || pre ~ /[A-Z][A-Z]+[ \t]*$/)) {
+                    err(NR, "requirement R" id " cites a literal value (" substr(restl, RSTART + 1, RLENGTH - 2) ") - forbidden, cite the name the spec keys the value under in Interface/Configuration")
+                    break
+                }
+                restl = substr(restl, RSTART + RLENGTH - 1)
+            }
         }
         /^- A[0-9]+(\.[0-9]+)*\./ {
             aid = $0; sub(/^- A/, "", aid); sub(/[^0-9.].*$/, "", aid); sub(/\.$/, "", aid)
@@ -131,6 +165,7 @@ lint_spec() {
         /^- V[0-9]+(\.[0-9]+)*[ .:]/ {
             vid = $0; sub(/^- V/, "", vid); sub(/[^0-9.].*$/, "", vid); sub(/\.$/, "", vid)
             vtail = $0; sub(/^- V[0-9]+(\.[0-9]+)*/, "", vtail)
+            pend = "V" vid; pendnr = NR
             if (substr(vtail, 1, 1) != ".") {
                 err(NR, "verification ID must be followed by a period and a space")
                 next
@@ -140,11 +175,11 @@ lint_spec() {
                 next
             }
             vseen[vid] = 1
-            pend = "V" vid; pendnr = NR
         }
         /^- T[0-9]+(\.[0-9]+)*[ .:]/ {
             tid = $0; sub(/^- T/, "", tid); sub(/[^0-9.].*$/, "", tid); sub(/\.$/, "", tid)
             ttail = $0; sub(/^- T[0-9]+(\.[0-9]+)*/, "", ttail)
+            pend = "T" tid; pendnr = NR
             if (substr(ttail, 1, 1) != ".") {
                 err(NR, "test ID must be followed by a period and a space")
                 next
@@ -156,11 +191,22 @@ lint_spec() {
             tseen[tid] = 1
             if (ttail !~ /R[0-9]/ && substr($0, length($0), 1) != ":")
                 err(NR, "Tests entry T" tid " cites no requirement R-ID")
-            pend = "T" tid; pendnr = NR
+            # Citation existence: every R-ID cited on a Tests entry
+            # line (ID-range endpoints included, e.g. R3-R7) must name
+            # a requirement seen in this file. V and J citations are
+            # not checked.
+            cre = $0
+            while (match(cre, /R[0-9]+(\.[0-9]+)*/)) {
+                ctok = substr(cre, RSTART, RLENGTH)
+                if (!(("." substr(ctok, 2)) in seen))
+                    err(NR, "test T" tid " cites nonexistent requirement " ctok)
+                cre = substr(cre, RSTART + RLENGTH)
+            }
         }
         /^- J[0-9]+(\.[0-9]+)*[ .:]/ {
             jid = $0; sub(/^- J/, "", jid); sub(/[^0-9.].*$/, "", jid); sub(/\.$/, "", jid)
             jtail = $0; sub(/^- J[0-9]+(\.[0-9]+)*/, "", jtail)
+            pend = "J" jid; pendnr = NR
             if (substr(jtail, 1, 1) != ".") {
                 err(NR, "justification ID must be followed by a period and a space")
                 next
@@ -170,7 +216,6 @@ lint_spec() {
                 next
             }
             jseen[jid] = 1
-            pend = "J" jid; pendnr = NR
         }
         END {
             for (k in seen) {
