@@ -249,10 +249,20 @@ endpoint to its last, subtrees included.
 Optional; present when any requirement needs an illustration or
 explanation. One entry per explained requirement, the A-ID mirroring the
 R-ID: A3 explains R3; A2 explains the R2 group with its subtree. An entry
-holds concrete input→output examples and explanations, no new requirements:
+holds concrete input→output examples and explanations, no new
+requirements, and occupies exactly one line:
 - A3. `get("k")` on a key expired one second ago returns NOT_FOUND.
-- A2. R2 subtree: `put("k", v)` at t0; `get("k")` at t0+TTL+1 s returns
-  NOT_FOUND; a write at t1 restarts the expiry clock (R2.2).
+- A2. R2 subtree: `put("k", v)` at t0; `get("k")` at t0+TTL+1 s returns NOT_FOUND; a write at t1 restarts the expiry clock (R2.2).
+
+## Tests
+Optional; present when requirements are covered by recorded tests. One
+entry per test — a stable ID, flat (T1) or multi-level (T1.1), same
+rules as R-IDs: unique, never renumbered; an ID with children is a group
+caption ending with a colon; a leaf entry cites the requirement IDs it
+covers. One entry occupies exactly one line, however long:
+- T1. Key expiry:
+- T1.1. get-expired-key returns NOT_FOUND (R3)
+- T1.2. last-write restarts the expiry clock (R2.2)
 
 ## Constraints
 Hard limits and invariants: capacity, latency budgets, compatibility
@@ -279,16 +289,14 @@ change, same commit:
   auth/token format
 
 ## Verification
-One entry per verified algorithm (a spec may describe several — always name
-the exact one). Recorded when the algorithm is checked with TLC/TLAPS; see
-the tla-plus / tlaps skills for run rules.
-- Algorithm: lease-based leader election (R3-R7)
-  Tool: TLC 1.8.0; model TLA/consensus.tla + tlc.cfg (Nodes = 3, MaxTerm = 2)
-  Level: L1 protocol — message loss/duplication and crash/recover modeled;
-    node internals abstracted as atomic phases
-  Checked: safety Inv1 (at most one leader), deadlock-freedom, liveness
-    elected ~> leading under weak per-node fairness
-  Not checked: Nodes > 3; Byzantine faults (crash only); no TLAPS proof
+One entry per verified algorithm, each with a stable ID — flat (V1) or
+multi-level (V2.1), same rules as R-IDs: unique, never renumbered, a
+citation covering the ID with its whole subtree. A spec may describe
+several algorithms — always name the exact one. Recorded when the
+algorithm is checked with TLC/TLAPS; see the tla-plus / tlaps skills for
+run rules. One entry occupies exactly one line, however long; fields are
+separated by semicolons:
+- V1. Algorithm: lease-based leader election (R3-R7); Tool: TLC 1.8.0, model TLA/consensus.tla + tlc.cfg (Nodes = 3, MaxTerm = 2); Level: L1 protocol — message loss/duplication and crash/recover modeled, node internals abstracted as atomic phases; Checked: safety Inv1 (at most one leader), deadlock-freedom, liveness elected ~> leading under weak per-node fairness; Not checked: Nodes > 3, Byzantine faults (crash only), no TLAPS proof
 ```
 
 Writing rules — a format rule lives in three coordinated places: the
@@ -330,9 +338,11 @@ any format rule updates all three places in the same commit:
   separate sentences (into separate requirements when they state separate
   behavior features). At most one subordinate clause per sentence is
   allowed, and only a condition or time clause ("when the lease expires,
-  the message is redelivered"). A requirement occupies exactly one line of
-  the spec file: wrapping it onto several lines is forbidden, however long
-  the line grows. A requirement line declares only — rationale, motivation,
+  the message is redelivered"). A prefixed entry — a requirement
+  (R), an Examples entry (A), a Verification entry (V), a Tests entry (T) —
+  occupies exactly one line of the spec file: wrapping it onto several
+  lines is forbidden, however long the line grows. A requirement line
+  declares only — rationale, motivation,
   explanations, and examples never appear inside it; Overview carries the
   system-level rationale, the Examples section carries per-requirement
   examples and explanations (template above). Vocabulary is common language with
@@ -344,7 +354,10 @@ any format rule updates all three places in the same commit:
   a requirement.
 - Stable IDs (R1, R2.1, R4.2.1, ...) are referenced by code comments, tests,
   and commits; never renumber — retire IDs (drop the statement, note the
-  retirement in DEVIATIONS.md) instead. Multi-level IDs (Rx.y.z, any depth)
+  retirement in DEVIATIONS.md) instead. The same scheme governs the other
+  prefixed entry families — Examples (Ax.y), Verification (Vx.y), Tests
+  (Tx.y): IDs unique per family, never renumbered, multi-level allowed.
+  Multi-level IDs (Rx.y.z, any depth)
   are allowed; every ID at every level is unique, and the no-renumbering
   and retirement rules apply to every level equally. An ID with children is
   a group, not a requirement: its line is a caption ending with a colon and
@@ -427,7 +440,9 @@ any format rule updates all three places in the same commit:
   divergence, never the change itself.
 - **Verification entries (template section above)**: a spec section that
   describes algorithms gets a `Verification` section when any of them is
-  checked with a formal tool. Rules:
+  checked with a formal tool. Each entry carries a stable ID — flat (V1)
+  or multi-level (V2.1), same rules as R-IDs — and occupies exactly one
+  line, its fields separated by semicolons (template above). Rules:
   - Name the exact algorithm (never "the algorithm" when the spec defines
     several); cite its requirement IDs.
   - State the abstraction level of the CHECK (tla-plus levels L0/L1/L2 or a
@@ -443,14 +458,23 @@ any format rule updates all three places in the same commit:
     re-run and update, or drop the entry (and say so in the DEVIATIONS.md
     record for that change). A stale entry claiming verification of behavior
     that no longer exists is worse than no entry.
+- **Tests entries (template section above)**: when requirements are covered
+  by recorded tests, the spec carries a Tests section with one entry per
+  test: a stable ID — flat (T1) or multi-level (T1.1), same rules as R-IDs
+  (unique, never renumbered; a group ID is a caption ending with a colon) —
+  citing the requirement IDs it covers; one entry per line (one-line rule
+  above). A test per requirement ID is the default expectation (section 7).
 
 ## 5. Post-change consistency check (always, before implementing)
 
 First the mechanical pass: run `speclint` (shipped in this skill's
 directory) over the changed spec files — and over `specs/index.md` and
-`specs/GLOSSARY.md` when they are touched. It checks the requirement-line
-format (R-ID syntax, group/leaf colon consistency, unique IDs,
-A↔R mirroring), index path existence with valid Status values, and glossary
+`specs/GLOSSARY.md` when they are touched. It checks the prefixed-entry
+format — R-ID syntax, group/leaf colon consistency, unique IDs, A↔R
+mirroring; V-ID and T-ID syntax with unique IDs per family; leaf Tests
+entries citing the R-IDs they cover; the one-line rule for R, A, V, and T
+entries (an entry continuing onto an indented next line is an error) —
+plus index path existence with valid Status values, and glossary
 alphabetical order with resolvable prefixes. It also emits a warning (a
 warning-level finding, softer than the format errors above) when a
 requirement line R... cites a literal value — a number with units, e.g.
@@ -568,7 +592,8 @@ Rules:
 ## 7. Code ↔ spec compliance
 
 - Implementing from a spec: cite requirement IDs (commit message or PR text).
-  A test per requirement ID is the default expectation.
+  A test per requirement ID is the default expectation; recorded tests
+  carry stable T-IDs citing the R-IDs they cover (section 4 Tests).
 - Implementing a DEVIATIONS.md entry: cite its D-ID; when the change makes the
   code conform to the new spec, remove the entry in that same commit
   (section 6 lifecycle).
@@ -638,9 +663,10 @@ three places together (section 4 preamble).
 - Compound behavior requirements: one line bundling several behavior features
   ("expires after TTL seconds and reads of expired keys return NOT_FOUND") —
   one feature per requirement; split it (section 4 writing rules).
-- A requirement wrapped onto several lines of the spec file — one rule, one
-  line; wrapping is forbidden however long the line grows (section 4 writing
-  rules).
+- A prefixed entry — a requirement (R), an Examples entry (A), a
+  Verification entry (V), a Tests entry (T) — wrapped onto several lines
+  of the spec file — one entry, one line; wrapping is forbidden however
+  long the line grows (section 4 writing rules).
 - Joined independent clauses or a stack of subordinate clauses inside a
   requirement sentence — split the independent clauses into separate
   sentences (into separate requirements when they state separate behavior
@@ -655,6 +681,10 @@ three places together (section 4 preamble).
   with a period (section 4).
 - An Ax.y Examples entry with no matching Rx.y — a dangling explanation;
   delete it or re-point it when the requirement retires (section 4).
+- Recorded test entries with no stable T-ID, or a Tests entry citing no
+  requirement R-ID — a test tracing to no requirement verifies nothing
+  spec-backed; give it a T-ID and the R-IDs it covers, or drop it
+  (section 4).
 - Undefined local terms in requirements: project jargon or ad-hoc names whose
   interpretation is fixed nowhere — no Definitions entry, no GLOSSARY.md row;
   requirement lines may use common terms and defined full-ID terms only
@@ -693,6 +723,8 @@ three places together (section 4 preamble).
 
 ### Verification
 - "Verified"/"tested" claims about algorithms with no Verification entry, or
-  entries that: name no specific algorithm (in a multi-algorithm spec), state
-  no abstraction level, omit the Not-checked list, claim proof for bounded
-  TLC evidence, or survive a behavior change to the algorithm.
+  entries that: name no specific algorithm (in a multi-algorithm spec),
+  carry no stable V-ID or span several lines (one entry, one line, fields
+  separated by semicolons), state no abstraction level, omit the
+  Not-checked list, claim proof for bounded TLC evidence, or survive a
+  behavior change to the algorithm.

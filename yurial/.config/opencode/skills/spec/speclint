@@ -14,6 +14,12 @@
 #   - requirement IDs are unique; every child's ancestor IDs exist and
 #     are groups;
 #   - every Examples entry A<x> mirrors an existing requirement R<x>;
+#   - verification lines match "- V<digits>(.<digits>)*[.] Text" and
+#     verification IDs are unique;
+#   - tests lines match "- T<digits>(.<digits>)*[.] Text", test IDs are
+#     unique, and every leaf Tests entry cites a requirement R-ID;
+#   - a prefixed entry (R, A, V, T) must not continue onto an indented
+#     next line: one entry occupies exactly one line;
 #   - warning: a requirement line citing a literal value (a number with
 #     units, e.g. 30 s, 5 ms, 100%) in a file that has an Interface or
 #     Configuration section — cite the parameter or argument name declared
@@ -30,8 +36,9 @@
 # Findings go to stderr; warnings carry a "warning:" prefix. Exit status:
 # 0 — clean, 1 — warnings but no errors, 2 — lint errors; a usage error
 # (invalid invocation) counts as an error: also 2.
-# Known limit: a requirement wrapped onto continuation lines is invisible
-# to a line-based lint; the one-line rule stays a review check.
+# Known limit: only an indented continuation of a prefixed entry is
+# detected; a non-indented (lazy markdown) continuation is invisible to a
+# line-based lint, and the one-line rule stays partly a review check.
 
 set -u
 
@@ -55,6 +62,14 @@ lint_spec() {
             printf "%s:%d: warning: %s\n", FILENAME, nr, m > "/dev/stderr"
             warned = 1
         }
+        # One-line rule: a prefixed entry (R/A/V/T) must not continue onto
+        # an indented next line. This block runs first for every line; the
+        # entry blocks below set pend for the next line to check.
+        {
+            if (pend != "" && $0 ~ /^[ \t]+/)
+                err(pendnr, "entry " pend " is wrapped onto the next line - one entry occupies exactly one line, wrapping is forbidden")
+            pend = ""
+        }
         /^#+[ \t]*(Interface|Configuration)([ \t]*:|[ \t]*$)/ { hasifconf = 1 }
         /^- R[0-9]+(\.[0-9]+)*[ .:]/ {
             id = $0; sub(/^- R/, "", id); sub(/[^0-9.].*$/, "", id); sub(/\.$/, "", id)
@@ -68,6 +83,7 @@ lint_spec() {
                 err(NR, "duplicate requirement ID R" id)
                 next
             }
+            pend = "R" id; pendnr = NR
             seen[key] = substr($0, length($0), 1)
             ln[key] = NR
             # Literal-value scan: a number with units inside the padded tail
@@ -80,8 +96,39 @@ lint_spec() {
         }
         /^- A[0-9]+(\.[0-9]+)*\./ {
             aid = $0; sub(/^- A/, "", aid); sub(/[^0-9.].*$/, "", aid); sub(/\.$/, "", aid)
+            pend = "A" aid; pendnr = NR
             if (!("." aid in seen))
                 err(NR, "Examples entry A" aid " mirrors no requirement R" aid)
+        }
+        /^- V[0-9]+(\.[0-9]+)*[ .:]/ {
+            vid = $0; sub(/^- V/, "", vid); sub(/[^0-9.].*$/, "", vid); sub(/\.$/, "", vid)
+            vtail = $0; sub(/^- V[0-9]+(\.[0-9]+)*/, "", vtail)
+            if (substr(vtail, 1, 1) != ".") {
+                err(NR, "verification ID must be followed by a period and a space")
+                next
+            }
+            if (vid in vseen) {
+                err(NR, "duplicate verification ID V" vid)
+                next
+            }
+            vseen[vid] = 1
+            pend = "V" vid; pendnr = NR
+        }
+        /^- T[0-9]+(\.[0-9]+)*[ .:]/ {
+            tid = $0; sub(/^- T/, "", tid); sub(/[^0-9.].*$/, "", tid); sub(/\.$/, "", tid)
+            ttail = $0; sub(/^- T[0-9]+(\.[0-9]+)*/, "", ttail)
+            if (substr(ttail, 1, 1) != ".") {
+                err(NR, "test ID must be followed by a period and a space")
+                next
+            }
+            if (tid in tseen) {
+                err(NR, "duplicate test ID T" tid)
+                next
+            }
+            tseen[tid] = 1
+            if (ttail !~ /R[0-9]/ && substr($0, length($0), 1) != ":")
+                err(NR, "Tests entry T" tid " cites no requirement R-ID")
+            pend = "T" tid; pendnr = NR
         }
         END {
             for (k in seen) {
