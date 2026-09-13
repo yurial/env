@@ -178,9 +178,10 @@ Spec source of truth for: <component / feature name>
 
 ## Overview
 What this component does and why it exists. The place for system-level
-explanations and rationale behind the requirements; may cite requirement
-IDs. Requirement lines never carry explanations (Behavior rules below);
-per-requirement examples and explanations live in Examples (Ax.y entries).
+purpose and explanations; may cite requirement IDs. Requirement lines
+never carry explanations (Behavior rules below); per-requirement examples
+and explanations live in Examples (Ax.y entries), per-decision rationale
+in Justification (J entries).
 
 ## Scope
 In: <explicit list of responsibilities>.
@@ -231,9 +232,9 @@ the spec file. Every requirement is written in declarative sentences; a
 line may carry more than one sentence, each without joined independent
 clauses and with at most one subordinate condition or time clause. A
 requirement line declares the rule only — no explanations or rationale
-inside it; those live in Overview and Examples. Every requirement line
-states exactly one behavior feature, uses common language and generally
-accepted terms —
+inside it; those live in Overview, Examples, and Justification. Every
+requirement line states exactly one behavior feature, uses common
+language and generally accepted terms —
 local terms only with their interpretation fixed in Definitions and
 recorded in GLOSSARY.md — and is unambiguous to the reader:
 - R1. `put(k, v)` with an existing key atomically replaces the old value.
@@ -264,9 +265,21 @@ covers. One entry occupies exactly one line, however long:
 - T1.1. get-expired-key returns NOT_FOUND (R3)
 - T1.2. last-write restarts the expiry clock (R2.2)
 
-## Constraints
-Hard limits and invariants: capacity, latency budgets, compatibility
-(versions, formats), security, environment assumptions.
+## Usage constraints
+Constraints on the application of the component — externally imposed
+budgets (capacity, latency), applicability bounds, compatibility
+(versions, formats), security requirements, environment assumptions.
+Internal limits and behavior do not live here: behavior belongs in
+Behavior, self-enforced baked-in limits in Configuration.
+
+## Justification
+Optional; present when the rationale behind chosen defaults, algorithm
+details, or formulas exists and matters; absent otherwise. One entry per
+justified decision, a stable ID — flat (J1) or multi-level (J2.1), same
+rules as R-IDs: unique, never renumbered. An entry is prose citing the
+requirement or configuration IDs it justifies and occupies exactly one
+line:
+- J1. Why `batch_timeout` defaults to 100 ms: the coalescing window of R4 must cover the median RPC burst (~60 ms) yet close within the 150 ms latency budget.
 
 ## Error handling
 Semantics of the error codes enumerated in Interface: classes, retry
@@ -339,13 +352,14 @@ any format rule updates all three places in the same commit:
   behavior features). At most one subordinate clause per sentence is
   allowed, and only a condition or time clause ("when the lease expires,
   the message is redelivered"). A prefixed entry — a requirement
-  (R), an Examples entry (A), a Verification entry (V), a Tests entry (T) —
-  occupies exactly one line of the spec file: wrapping it onto several
-  lines is forbidden, however long the line grows. A requirement line
-  declares only — rationale, motivation,
+  (R), an Examples entry (A), a Verification entry (V), a Tests entry (T),
+  a Justification entry (J) — occupies exactly one line of the spec file:
+  wrapping it onto several lines is forbidden, however long the line
+  grows. A requirement line declares only — rationale, motivation,
   explanations, and examples never appear inside it; Overview carries the
-  system-level rationale, the Examples section carries per-requirement
-  examples and explanations (template above). Vocabulary is common language with
+  system-level purpose, the Examples section carries per-requirement
+  examples and explanations, the Justification section carries
+  per-decision rationale (template above). Vocabulary is common language with
   generally accepted terms and keywords; local (project-specific) terms are
   part of it only when their interpretation is defined in the spec's
   Definitions section and recorded in GLOSSARY.md (full-ID rule above).
@@ -356,7 +370,8 @@ any format rule updates all three places in the same commit:
   and commits; never renumber — retire IDs (drop the statement, note the
   retirement in DEVIATIONS.md) instead. The same scheme governs the other
   prefixed entry families — Examples (Ax.y), Verification (Vx.y), Tests
-  (Tx.y): IDs unique per family, never renumbered, multi-level allowed.
+  (Tx.y), Justification (Jx.y): IDs unique per family, never renumbered,
+  multi-level allowed.
   Multi-level IDs (Rx.y.z, any depth)
   are allowed; every ID at every level is unique, and the no-renumbering
   and retirement rules apply to every level equally. An ID with children is
@@ -407,9 +422,9 @@ any format rule updates all three places in the same commit:
   elapses, the limit is hit, the count is exhausted. The behavior
   itself stays in Behavior requirements; the entry cites their IDs
   instead of restating them. A limit the component itself enforces
-  through a baked-in value is a fixed value recorded here, not a
-  Constraints entry — Constraints keeps externally imposed budgets and
-  invariants.
+  through a baked-in value is a fixed value recorded here, not a Usage
+  constraints entry — Usage constraints keeps externally imposed budgets
+  and applicability bounds, never self-enforced limits.
 - **Behavior requirements cite parameter and argument names, never their
   values.** When a requirement describes behavior governed by a configurable
   parameter, a named constant, or an argument, it refers to the identifier —
@@ -471,10 +486,10 @@ First the mechanical pass: run `speclint` (shipped in this skill's
 directory) over the changed spec files — and over `specs/index.md` and
 `specs/GLOSSARY.md` when they are touched. It checks the prefixed-entry
 format — R-ID syntax, group/leaf colon consistency, unique IDs, A↔R
-mirroring; V-ID and T-ID syntax with unique IDs per family; leaf Tests
-entries citing the R-IDs they cover; the one-line rule for R, A, V, and T
-entries (an entry continuing onto an indented next line is an error) —
-plus index path existence with valid Status values, and glossary
+mirroring; V-ID, T-ID, and J-ID syntax with unique IDs per family; leaf
+Tests entries citing the R-IDs they cover; the one-line rule for R, A, V,
+T, and J entries (an entry continuing onto an indented next line is an
+error) — plus index path existence with valid Status values, and glossary
 alphabetical order with resolvable prefixes. It also emits a warning (a
 warning-level finding, softer than the format errors above) when a
 requirement line R... cites a literal value — a number with units, e.g.
@@ -664,18 +679,24 @@ three places together (section 4 preamble).
   ("expires after TTL seconds and reads of expired keys return NOT_FOUND") —
   one feature per requirement; split it (section 4 writing rules).
 - A prefixed entry — a requirement (R), an Examples entry (A), a
-  Verification entry (V), a Tests entry (T) — wrapped onto several lines
-  of the spec file — one entry, one line; wrapping is forbidden however
-  long the line grows (section 4 writing rules).
+  Verification entry (V), a Tests entry (T), a Justification entry (J) —
+  wrapped onto several lines of the spec file — one entry, one line;
+  wrapping is forbidden however long the line grows (section 4 writing
+  rules).
 - Joined independent clauses or a stack of subordinate clauses inside a
   requirement sentence — split the independent clauses into separate
   sentences (into separate requirements when they state separate behavior
   features); at most one condition or time subordinate clause per sentence
   survives (section 4 writing rules).
 - Explanation, rationale, motivation, or an example merged into a requirement
-  line — requirement lines declare only; system-level rationale lives in
-  Overview, examples and per-requirement explanations live in the Examples
+  line — requirement lines declare only; system-level purpose lives in
+  Overview, per-decision rationale lives in the Justification section as
+  Jx.y entries citing the requirement or configuration IDs they justify,
+  and examples and per-requirement explanations live in the Examples
   section as Ax.y entries mirroring R-IDs (section 4).
+- A Jx.y Justification entry citing no live requirement or configuration
+  entry — a dangling rationale; delete it or re-point it when the
+  justified decision retires (section 4).
 - A group line that states a requirement, or a leaf ID carrying children —
   an ID with children is a group caption ending with a colon; a leaf ends
   with a period (section 4).

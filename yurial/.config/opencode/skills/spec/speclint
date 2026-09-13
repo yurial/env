@@ -18,7 +18,9 @@
 #     verification IDs are unique;
 #   - tests lines match "- T<digits>(.<digits>)*[.] Text", test IDs are
 #     unique, and every leaf Tests entry cites a requirement R-ID;
-#   - a prefixed entry (R, A, V, T) must not continue onto an indented
+#   - justification lines match "- J<digits>(.<digits>)*[.] Text" and
+#     justification IDs are unique;
+#   - a prefixed entry (R, A, V, T, J) must not continue onto an indented
 #     next line: one entry occupies exactly one line;
 #   - warning: a requirement line citing a literal value (a number with
 #     units, e.g. 30 s, 5 ms, 100%) in a file that has an Interface or
@@ -62,7 +64,7 @@ lint_spec() {
             printf "%s:%d: warning: %s\n", FILENAME, nr, m > "/dev/stderr"
             warned = 1
         }
-        # One-line rule: a prefixed entry (R/A/V/T) must not continue onto
+        # One-line rule: a prefixed entry (R/A/V/T/J) must not continue onto
         # an indented next line. This block runs first for every line; the
         # entry blocks below set pend for the next line to check.
         {
@@ -129,6 +131,20 @@ lint_spec() {
             if (ttail !~ /R[0-9]/ && substr($0, length($0), 1) != ":")
                 err(NR, "Tests entry T" tid " cites no requirement R-ID")
             pend = "T" tid; pendnr = NR
+        }
+        /^- J[0-9]+(\.[0-9]+)*[ .:]/ {
+            jid = $0; sub(/^- J/, "", jid); sub(/[^0-9.].*$/, "", jid); sub(/\.$/, "", jid)
+            jtail = $0; sub(/^- J[0-9]+(\.[0-9]+)*/, "", jtail)
+            if (substr(jtail, 1, 1) != ".") {
+                err(NR, "justification ID must be followed by a period and a space")
+                next
+            }
+            if (jid in jseen) {
+                err(NR, "duplicate justification ID J" jid)
+                next
+            }
+            jseen[jid] = 1
+            pend = "J" jid; pendnr = NR
         }
         END {
             for (k in seen) {
