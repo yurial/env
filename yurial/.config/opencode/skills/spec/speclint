@@ -13,7 +13,12 @@
 #   - an ID with children is a group, an ID without children is a leaf;
 #   - requirement IDs are unique; every child's ancestor IDs exist and
 #     are groups;
-#   - every Examples entry A<x> mirrors an existing requirement R<x>.
+#   - every Examples entry A<x> mirrors an existing requirement R<x>;
+#   - warning: a requirement line citing a literal value (a number with
+#     units, e.g. 30 s, 5 ms, 100%) in a file that has an Interface or
+#     Configuration section — cite the parameter or argument name declared
+#     there instead; defaults, boundaries, and magic numbers look the same
+#     to a mechanical check, hence warning level.
 # index.md checks:
 #   - row paths exist; Status is draft or stable; Reference is a lowercase
 #     hyphen-separated unique ID.
@@ -22,7 +27,8 @@
 #     Defined in equals the term prefix (optionally with requirement IDs);
 #     the prefix resolves against the collected index references.
 #
-# Findings go to stderr. Exit status: 0 — clean, 1 — findings, 2 — usage.
+# Findings go to stderr; warnings carry a "warning:" prefix and do not
+# affect the exit status. Exit status: 0 — clean, 1 — findings, 2 — usage.
 # Known limit: a requirement wrapped onto continuation lines is invisible
 # to a line-based lint; the one-line rule stays a review check.
 
@@ -42,6 +48,10 @@ lint_spec() {
             printf "%s:%d: %s\n", FILENAME, nr, m > "/dev/stderr"
             bad = 1
         }
+        function warn(nr, m) {
+            printf "%s:%d: warning: %s\n", FILENAME, nr, m > "/dev/stderr"
+        }
+        /^#+[ \t]*(Interface|Configuration)([ \t]*:|[ \t]*$)/ { hasifconf = 1 }
         /^- R[0-9]+(\.[0-9]+)*[ .:]/ {
             id = $0; sub(/^- R/, "", id); sub(/[^0-9.].*$/, "", id); sub(/\.$/, "", id)
             tail = $0; sub(/^- R[0-9]+(\.[0-9]+)*/, "", tail)
@@ -56,6 +66,13 @@ lint_spec() {
             }
             seen[key] = substr($0, length($0), 1)
             ln[key] = NR
+            # Literal-value scan: a number with units inside the padded tail
+            # (padding replaces ^|$ boundaries; alternatives longest-first).
+            if (match(" " tail " ", /([^A-Za-z0-9])[0-9]+([.,][0-9]+)?[ \t]?(seconds|second|secs|sec|us|ns|ms|s|minutes|minute|mins|min|hours|hour|hrs|hr|h|days|day|bytes|Bytes|byte|Byte|KiB|MiB|GiB|TiB|kB|KB|MB|GB|TB|B|мкс|мс|сек|мин|%)([^A-Za-z0-9])/)) {
+                wn++
+                wline[wn] = NR; wid[wn] = id
+                wval[wn] = substr(" " tail " ", RSTART + 1, RLENGTH - 2)
+            }
         }
         /^- A[0-9]+(\.[0-9]+)*\./ {
             aid = $0; sub(/^- A/, "", aid); sub(/[^0-9.].*$/, "", aid); sub(/\.$/, "", aid)
@@ -83,6 +100,9 @@ lint_spec() {
                         err(ln[p], "ancestor ID R" substr(p, 2) " of R" substr(k, 2) " is a leaf, must be a group (:)")
                 }
             }
+            if (hasifconf)
+                for (i = 1; i <= wn; i++)
+                    warn(wline[i], "requirement R" wid[i] " cites a literal value (" wval[i] ") instead of a parameter or argument name declared in Interface/Configuration")
             exit bad ? 1 : 0
         }
     ' "$1" || fail=1
