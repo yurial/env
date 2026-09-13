@@ -432,10 +432,13 @@ any format rule updates all three places in the same commit:
   Interface or Configuration — not to a concrete value. The name is the
   stable handle: values are re-tuned, differ per deployment, or arrive per
   call, and a requirement that hard-codes a value silently breaks at the
-  first re-tune. A literal value appears in a requirement only where no name
-  exists to cite yet (a magic number — record it in Configuration) or where
-  the requirement is about that specific value itself (a default, a
-  boundary). Example (user's verbatim wording): `R1.2 При достижении
+  first re-tune. A literal value never appears in a requirement line: a
+  magic number is first recorded in Configuration and the requirement
+  cites that entry; a default or a boundary is a fact about the
+  parameter, carried by its Configuration row, not by the requirement.
+  The mechanical lint (section 5) enforces this as an unconditional
+  error on every requirement line. Example (user's verbatim wording):
+  `R1.2 При достижении
   exitTimeout процесс завершается.` — the parameter name `exitTimeout` is
   cited, not its value (e.g. `30s`).
 - Sections may be collapsed in small specs; keep the header (Status, scope,
@@ -490,16 +493,19 @@ mirroring; V-ID, T-ID, and J-ID syntax with unique IDs per family; leaf
 Tests entries citing the R-IDs they cover; the one-line rule for R, A, V,
 T, and J entries (an entry continuing onto an indented next line is an
 error) — plus index path existence with valid Status values, and glossary
-alphabetical order with resolvable prefixes. It also emits a warning (a
-warning-level finding, softer than the format errors above) when a
-requirement line R... cites a literal value — a number with units, e.g.
-`30 s` — in a spec that has an Interface or Configuration section: the
-parameter or argument name declared there is the stable reference; the
-literal is legitimate only where no name exists yet (a magic number) or
-the requirement is about that value itself (a default, a boundary)
-(section 4 writing rules). Exit status: 0 — clean, 1 — warnings but no
-errors, 2 — lint errors; a usage error (invalid invocation) counts as an
-error and also yields 2. Fix every finding before the semantic pass.
+alphabetical order with resolvable prefixes. It also reports an error
+when a requirement line R... cites a literal value — a number with
+units, e.g. `30 s`: literals are forbidden in requirement lines; cite
+the parameter or argument name declared in Interface/Configuration
+(section 4 writing rules). The check runs on every requirement line,
+unconditionally — a spec without Interface or Configuration sections
+gets the same error. Configuration table rows and Examples (A-)entries
+are not scanned: they are different line families, and the concrete
+values they carry are exempt by construction; prose outside requirement
+lines is likewise not scanned. Exit status: 0 — clean, 1 — warnings
+but no errors, 2 — lint errors; a usage error (invalid invocation)
+counts as an error and also yields 2. Fix every finding before the
+semantic pass.
 
 After editing any spec, run the semantic pass over the *related* specs
 (found via the index, Dependencies sections, and shared vocabulary):

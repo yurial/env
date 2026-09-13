@@ -22,11 +22,12 @@
 #     justification IDs are unique;
 #   - a prefixed entry (R, A, V, T, J) must not continue onto an indented
 #     next line: one entry occupies exactly one line;
-#   - warning: a requirement line citing a literal value (a number with
-#     units, e.g. 30 s, 5 ms, 100%) in a file that has an Interface or
-#     Configuration section — cite the parameter or argument name declared
-#     there instead; defaults, boundaries, and magic numbers look the same
-#     to a mechanical check, hence warning level.
+#   - a requirement line citing a literal value (a number with
+#     units, e.g. 30 s, 5 ms, 100%) is an error — literals are
+#     forbidden in requirement lines; cite the parameter or argument
+#     name declared in Interface/Configuration instead. The check runs
+#     on every requirement line regardless of which sections the file
+#     has.
 # index.md checks:
 #   - row paths exist; Status is draft or stable; Reference is a lowercase
 #     hyphen-separated unique ID.
@@ -72,7 +73,6 @@ lint_spec() {
                 err(pendnr, "entry " pend " is wrapped onto the next line - one entry occupies exactly one line, wrapping is forbidden")
             pend = ""
         }
-        /^#+[ \t]*(Interface|Configuration)([ \t]*:|[ \t]*$)/ { hasifconf = 1 }
         /^- R[0-9]+(\.[0-9]+)*[ .:]/ {
             id = $0; sub(/^- R/, "", id); sub(/[^0-9.].*$/, "", id); sub(/\.$/, "", id)
             tail = $0; sub(/^- R[0-9]+(\.[0-9]+)*/, "", tail)
@@ -90,11 +90,10 @@ lint_spec() {
             ln[key] = NR
             # Literal-value scan: a number with units inside the padded tail
             # (padding replaces ^|$ boundaries; alternatives longest-first).
-            if (match(" " tail " ", /([^A-Za-z0-9])[0-9]+([.,][0-9]+)?[ \t]?(seconds|second|secs|sec|us|ns|ms|s|minutes|minute|mins|min|hours|hour|hrs|hr|h|days|day|bytes|Bytes|byte|Byte|KiB|MiB|GiB|TiB|kB|KB|MB|GB|TB|B|мкс|мс|сек|мин|%)([^A-Za-z0-9])/)) {
-                wn++
-                wline[wn] = NR; wid[wn] = id
-                wval[wn] = substr(" " tail " ", RSTART + 1, RLENGTH - 2)
-            }
+            # Unconditional, error-level: literals are forbidden in
+            # requirement lines whatever sections the file has.
+            if (match(" " tail " ", /([^A-Za-z0-9])[0-9]+([.,][0-9]+)?[ \t]?(seconds|second|secs|sec|us|ns|ms|s|minutes|minute|mins|min|hours|hour|hrs|hr|h|days|day|bytes|Bytes|byte|Byte|KiB|MiB|GiB|TiB|kB|KB|MB|GB|TB|B|мкс|мс|сек|мин|%)([^A-Za-z0-9])/))
+                err(NR, "requirement R" id " cites a literal value (" substr(" " tail " ", RSTART + 1, RLENGTH - 2) ") - forbidden, cite the parameter or argument name declared in Interface/Configuration")
         }
         /^- A[0-9]+(\.[0-9]+)*\./ {
             aid = $0; sub(/^- A/, "", aid); sub(/[^0-9.].*$/, "", aid); sub(/\.$/, "", aid)
@@ -167,9 +166,6 @@ lint_spec() {
                         err(ln[p], "ancestor ID R" substr(p, 2) " of R" substr(k, 2) " is a leaf, must be a group (:)")
                 }
             }
-            if (hasifconf)
-                for (i = 1; i <= wn; i++)
-                    warn(wline[i], "requirement R" wid[i] " cites a literal value (" wval[i] ") instead of a parameter or argument name declared in Interface/Configuration")
             exit bad ? 2 : (warned ? 1 : 0)
         }
     ' "$1"
