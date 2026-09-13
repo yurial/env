@@ -179,7 +179,7 @@ Spec source of truth for: <component / feature name>
 ## Overview
 What this component does and why it exists. The place for system-level
 purpose and explanations; may cite requirement IDs. Requirement lines
-never carry explanations (Behavior rules below); per-requirement examples
+never carry explanations (Requirements rules below); per-requirement examples
 and explanations live in Examples (Ax.y entries), per-decision rationale
 in Justification (J entries).
 
@@ -221,7 +221,7 @@ its single value marked `magic`, no default:
 | `MAX_RETRIES` | `fixed` 3 attempts | — | Delivery retries before dead-lettering (R3) |
 | `60000` ms, `batch_timeout` upper bound | `magic` 60000 ms | — | Values above 60000 ms are rejected as out of range (R4) |
 
-## Behavior
+## Requirements
 Sequencing rules, ordering guarantees, algorithm semantics (steps or
 invariants, not code) — written as numbered requirements. Each requirement
 has a stable ID — flat (R1) or multi-level (R2.1, R4.2.1). Every leaf
@@ -270,7 +270,7 @@ Constraints on the application of the component — externally imposed
 budgets (capacity, latency), applicability bounds, compatibility
 (versions, formats), security requirements, environment assumptions.
 Internal limits and behavior do not live here: behavior belongs in
-Behavior, self-enforced baked-in limits in Configuration.
+Requirements, self-enforced baked-in limits in Configuration.
 
 ## Justification
 Optional; present when the rationale behind chosen defaults, algorithm
@@ -341,7 +341,7 @@ any format rule updates all three places in the same commit:
   rewritten, term replaced), the link is removed from BOTH sides in the same
   commit — never leave one-sided or stale "just in case" links.
 - **Statements are declarative and testable, one behavior feature per line.**
-  Behavior requirements are written in declarative language ("must", "never",
+  Requirements are written in declarative language ("must", "never",
   "exactly once"): each states what the component does — never a narrative of
   how the code does it. Each line (numbered requirement) describes exactly
   ONE behavior feature: no compound statements bundling several behaviors —
@@ -420,12 +420,12 @@ any format rule updates all three places in the same commit:
   the extremes, interactions with other parameters when they exist; for
   a fixed value: what its value causes — what happens when the timeout
   elapses, the limit is hit, the count is exhausted. The behavior
-  itself stays in Behavior requirements; the entry cites their IDs
+  itself stays in Requirements entries; the entry cites their IDs
   instead of restating them. A limit the component itself enforces
   through a baked-in value is a fixed value recorded here, not a Usage
   constraints entry — Usage constraints keeps externally imposed budgets
   and applicability bounds, never self-enforced limits.
-- **Behavior requirements cite parameter and argument names, never their
+- **Requirements cite parameter and argument names, never their
   values.** When a requirement describes behavior governed by a configurable
   parameter, a named constant, or an argument, it refers to the identifier —
   the config key, constant name, or argument name exactly as declared in
@@ -675,7 +675,7 @@ three places together (section 4 preamble).
 
 ### Requirement format
 - Spec as narrative prose with no testable statements or IDs.
-- Compound behavior requirements: one line bundling several behavior features
+- Compound requirements: one line bundling several behavior features
   ("expires after TTL seconds and reads of expired keys return NOT_FOUND") —
   one feature per requirement; split it (section 4 writing rules).
 - A prefixed entry — a requirement (R), an Examples entry (A), a
@@ -731,7 +731,7 @@ three places together (section 4 preamble).
   literal records what the code actually carries — a nameless value;
   promoting it to a named constant is a code change, and only then does
   its row become `fixed` keyed by the identifier.
-- A behavior requirement citing a parameter's or argument's value instead
+- A requirement citing a parameter's or argument's value instead
   of its name ("the process exits after 30 s" where the rule is "on
   reaching exitTimeout") — values are re-tuned and differ per deployment;
   the name declared in Interface/Configuration is the stable reference
