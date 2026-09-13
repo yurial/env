@@ -452,14 +452,15 @@ directory) over the changed spec files — and over `specs/index.md` and
 format (R-ID syntax, group/leaf colon consistency, unique IDs,
 A↔R mirroring), index path existence with valid Status values, and glossary
 alphabetical order with resolvable prefixes. It also emits a warning (a
-warning-level finding, softer than the format errors above; it does not
-affect speclint's exit status) when a requirement line R... cites a
-literal value — a number with units, e.g. `30 s` — in a spec that has
-an Interface or Configuration section: the parameter or argument name
-declared there is the stable reference; the literal is legitimate only
-where no name exists yet (a magic number) or the requirement is about
-that value itself (a default, a boundary) (section 4 writing rules). Fix
-every finding before the semantic pass.
+warning-level finding, softer than the format errors above) when a
+requirement line R... cites a literal value — a number with units, e.g.
+`30 s` — in a spec that has an Interface or Configuration section: the
+parameter or argument name declared there is the stable reference; the
+literal is legitimate only where no name exists yet (a magic number) or
+the requirement is about that value itself (a default, a boundary)
+(section 4 writing rules). Exit status: 0 — clean, 1 — warnings but no
+errors, 2 — lint errors; a usage error (invalid invocation) counts as an
+error and also yields 2. Fix every finding before the semantic pass.
 
 After editing any spec, run the semantic pass over the *related* specs
 (found via the index, Dependencies sections, and shared vocabulary):

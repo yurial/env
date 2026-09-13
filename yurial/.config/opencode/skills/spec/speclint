@@ -27,13 +27,16 @@
 #     Defined in equals the term prefix (optionally with requirement IDs);
 #     the prefix resolves against the collected index references.
 #
-# Findings go to stderr; warnings carry a "warning:" prefix and do not
-# affect the exit status. Exit status: 0 — clean, 1 — findings, 2 — usage.
+# Findings go to stderr; warnings carry a "warning:" prefix. Exit status:
+# 0 — clean, 1 — warnings but no errors, 2 — lint errors; a usage error
+# (invalid invocation) counts as an error: also 2.
 # Known limit: a requirement wrapped onto continuation lines is invisible
 # to a line-based lint; the one-line rule stays a review check.
 
 set -u
 
+# fail aggregates per-unit exit codes as their maximum: 2 (errors) beats
+# 1 (warnings only) beats 0 (clean).
 fail=0
 
 [ $# -ge 1 ] || { printf 'usage: speclint <path>...\n' >&2; exit 2; }
@@ -50,6 +53,7 @@ lint_spec() {
         }
         function warn(nr, m) {
             printf "%s:%d: warning: %s\n", FILENAME, nr, m > "/dev/stderr"
+            warned = 1
         }
         /^#+[ \t]*(Interface|Configuration)([ \t]*:|[ \t]*$)/ { hasifconf = 1 }
         /^- R[0-9]+(\.[0-9]+)*[ .:]/ {
@@ -103,9 +107,11 @@ lint_spec() {
             if (hasifconf)
                 for (i = 1; i <= wn; i++)
                     warn(wline[i], "requirement R" wid[i] " cites a literal value (" wval[i] ") instead of a parameter or argument name declared in Interface/Configuration")
-            exit bad ? 1 : 0
+            exit bad ? 2 : (warned ? 1 : 0)
         }
-    ' "$1" || fail=1
+    ' "$1"
+    rc=$?
+    if [ "$rc" -gt "$fail" ]; then fail=$rc; fi
 }
 
 lint_index() {
@@ -142,8 +148,10 @@ lint_index() {
             refs[ref] = 1
             print ref
         }
-        END { exit bad ? 1 : 0 }
-    ' "$1" >> "$refsrc" || fail=1
+        END { exit bad ? 2 : 0 }
+    ' "$1" >> "$refsrc"
+    rc=$?
+    if [ "$rc" -gt "$fail" ]; then fail=$rc; fi
 }
 
 lint_glossary() {
@@ -184,8 +192,10 @@ lint_glossary() {
             if (CHECKREFS == 1 && !(pp[1] in refs))
                 err(NR, "term prefix " pp[1] " resolves to no index reference")
         }
-        END { exit bad ? 1 : 0 }
-    ' "$1" || fail=1
+        END { exit bad ? 2 : 0 }
+    ' "$1"
+    rc=$?
+    if [ "$rc" -gt "$fail" ]; then fail=$rc; fi
 }
 
 for arg in "$@"; do
@@ -213,12 +223,12 @@ for arg in "$@"; do
                 ;;
             *)
                 printf 'speclint: %s: not a .md file\n' "$arg" >&2
-                fail=1
+                fail=2
                 ;;
         esac
     else
         printf 'speclint: %s: no such file or directory\n' "$arg" >&2
-        fail=1
+        fail=2
     fi
 done
 
