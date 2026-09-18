@@ -31,7 +31,7 @@ ZAI_ORIGINAL_URL='https://api.z.ai/api/coding/paas/v4'
 
 alias agrep="grep --colour=auto --colour=auto --exclude-dir=.git --exclude-dir=deps --exclude-dir=build --exclude-dir=new_reports -Rn"
 alias mcc="mcc_local -l"
-alias ya="~/flowruntime/ya"
+alias ya="~/streamflow/flowruntime/ya"
 alias cstyle="ya tool clang-format -style=file -i"
 alias opencode-direct="AI_BASE_URL=$ZAI_ORIGINAL_URL AI_TOKEN_VK= opencode"
 # opentui 0.4.5 bug: SSH_* env marks session "remote" and disables TERM/COLORTERM
