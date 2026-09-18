@@ -46,9 +46,9 @@ section 9 (TLAPS) instead of, or before, this loop.
    first (check it standalone), then the internal module.
 4. **Create a model with the smallest sensible bounds** (typically 2–3 nodes,
    1–2 in-flight messages; constants are assigned in the cfg, section 6.1). Run TLC
-    (execution via the tlc-run skill — delegated to assistant_stupid by whoever
-    leads the loop: the workflow driver directly, or assistant_heavy via
-    subdelegation; see section 1b) checking
+     (execution via the tlc-run skill — delegated to assistant_low by whoever
+     leads the loop: the workflow driver directly, or assistant_heavy via
+     subdelegation; see section 1b) checking
     *safety only* (TypeOK + invariants + deadlock). Fix until clean.
 5. **Coverage gate (hard stop).** Rerun the safety model with `-coverage 1` and
    verify every action fired. A never-fired action is a bug, an over-small model,
@@ -74,11 +74,11 @@ section 9 (TLAPS) instead of, or before, this loop.
    level of this spec (section 2) and what it abstracts away, what was checked
    (invariants/liveness, bounds), and the explicit Not-checked list.
 
-## 1b. Agent-based workflow (research via assistant_cheap; authoring by assistant_heavy; TLC loop heavy → assistant_stupid)
+## 1b. Agent-based workflow (research via assistant_low; authoring by assistant_heavy; TLC loop heavy → assistant_low)
 
 When authoring a TLA+ spec with the `tla-plus` skill, follow this delegation workflow:
 
-1. **Research with assistant_cheap.** Use the `assistant_cheap` researcher agent to read
+1. **Research with assistant_low.** Use the `assistant_low` researcher agent to read
    the relevant spec files, examples, and documentation. The agent should save
    references to useful spec files with exact line ranges in a temporary draft file
    (e.g. `TLA/draft.md` or a working copy in the project root). The draft should
@@ -97,14 +97,14 @@ When authoring a TLA+ spec with the `tla-plus` skill, follow this delegation wor
    ready, use `assistant_heavy` (on vk-zai-personal/heavy with reasoningEffort
    max) to author or update the TLA+ spec module and its cfg models according
    to the template (section 3) and writing rules (sections 4-7). The
-   heavy↔stupid iteration loop is led by assistant_heavy itself: subagents can
-   be launched only strictly down the ladder, and assistant_stupid is below
-   assistant_heavy, so heavy subdelegates every TLC run to `assistant_stupid`
+   heavy↔low iteration loop is led by assistant_heavy itself: subagents can
+   be launched only strictly down the ladder, and assistant_low is below
+   assistant_heavy, so heavy subdelegates every TLC run to `assistant_low`
    itself (tlc-run skill, section 3 there) — no round-trips through the
    driver. After each edit assistant_heavy:
    - Runs TLC on the safety model (via the tlc-run skill, subdelegated to
-     assistant_stupid) checking TypeOK, invariants, and deadlock.
-   - Reviews the verbatim TLC report from assistant_stupid for errors,
+     assistant_low) checking TypeOK, invariants, and deadlock.
+   - Reviews the verbatim TLC report from assistant_low for errors,
      counterexamples, or coverage gaps.
    - Fixes errors in the spec based on TLC findings.
    - Repeats until the safety model is green and the coverage gate passes
@@ -115,13 +115,13 @@ iterations** before the deep-fix pass (step 3).
 
 3. **Deep-fix pass by assistant_heavy.** If after 3 complete TLC runs
    (i.e., after 3 spec iterations) the same or similar errors persist, or the
-   spec requires high-effort reasoning (complex liveness, tricky refinements,
-   intricate invariant design), assistant_heavy stops mere iterating and fixes
-   the spec from assistant_stupid's verbatim TLC report with full effort.
+    spec requires high-effort reasoning (complex liveness, tricky refinements,
+    intricate invariant design), assistant_heavy stops mere iterating and fixes
+    the spec from assistant_low's verbatim TLC report with full effort.
    Assistant_heavy should:
    - Review the current spec and the TLC report
    - Apply targeted fixes based on deep reasoning about the error class
-   - Re-run TLC via assistant_stupid to verify the fix
+    - Re-run TLC via assistant_low to verify the fix
    - Document the fix in the spec header; if it changes behavior, the change
      goes into the governing project spec immediately, with only the resulting
      code-vs-spec divergence recorded in DEVIATIONS.md (spec skill, section 6)
@@ -130,10 +130,10 @@ iterations** before the deep-fix pass (step 3).
    file (see spec skill section 1b for archive strategy). The draft is not part of
    the final commit and should be cleaned up to keep the repository clean.
 
-This workflow ensures that research leverages the cheap, fast assistant_cheap,
+This workflow ensures that research leverages the fast assistant_low,
 spec authoring and fixes stay with the high-effort assistant_heavy, and
-mechanical TLC runs are subdelegated to assistant_stupid by assistant_heavy
-itself (the heavy↔stupid cycle is led by heavy, keeping iterations tight),
+mechanical TLC runs are subdelegated to assistant_low by assistant_heavy
+itself (the heavy↔low cycle is led by heavy, keeping iterations tight),
 keeping the draft ephemeral.
 
 ## 2. Abstraction levels for a large system
@@ -571,7 +571,7 @@ Invocation mechanics live in the `tlc-run` skill: exact commands and flags,
 cfg naming recap (tlc.cfg / <component>.tlc.cfg / variant names are defined
 in section 6.1 there), result classification table (green vs violation
 classes), exit codes, and the delegation protocol for launching runs via the
-assistant_stupid background subagent (instruction template: workdir, command,
+assistant_low background subagent (instruction template: workdir, command,
 what is checked, expected output, report format, boundaries). The caller is
 whoever leads the loop: the workflow driver directly, or a higher executor
 subdelegating strictly down the ladder — typically assistant_heavy inside the

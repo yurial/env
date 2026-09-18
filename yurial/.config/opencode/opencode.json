@@ -26,7 +26,6 @@
           "name": "heavy",
           "reasoning": true,
           "variants": {
-            "low": { "reasoningEffort": "low" },
             "high": { "reasoningEffort": "high" },
             "max": { "reasoningEffort": "max" }
           },
@@ -49,30 +48,7 @@
             "output": ["text"]
           },
           "variants": {
-            "low": { "reasoningEffort": "low" },
-            "high": { "reasoningEffort": "high" },
-            "max": { "reasoningEffort": "max" }
-          },
-          "primeTimeStart": "14:00+08:00",
-          "primeTimeEnd": "18:00+08:00",
-          "primeTimeDay": ["mon", "tue", "wed", "thu", "fri"],
-          "primeTimeRetry": true
-        },
-        "cheap": {
-          "id": "glm-4.6v",
-          "limit": {
-            "context": 100000,
-            "output": 128000
-          },
-          "name": "cheap",
-          "attachment": true,
-          "variants": {
-            "stupid": { "thinking": { "type": "disabled" } },
-            "smart": { "thinking": { "type": "enabled" } }
-          },
-          "modalities": {
-            "input": ["text", "image"],
-            "output": ["text"]
+            "high": { "reasoningEffort": "high" }
           },
           "primeTimeStart": "14:00+08:00",
           "primeTimeEnd": "18:00+08:00",

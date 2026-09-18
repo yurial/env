@@ -35,7 +35,7 @@ or a bug (fix the code) — never silently tolerated.
 When authoring or updating a specification with the `spec` skill, follow this
 two-step agent delegation workflow:
 
-- **Research with assistant_cheap.** Use the `assistant_cheap` researcher agent
+- **Research with assistant_low.** Use the `assistant_low` researcher agent
     to read the relevant specs, sources, and documentation.
     The agent should save references to useful documents with exact line ranges
    in a temporary draft file (e.g. `specs/draft.md` or a working copy in the
@@ -66,7 +66,7 @@ two-step agent delegation workflow:
    methodology or rationale that is valuable for future reference).
 
 This workflow ensures that the authoring process leverages the research
-capabilities of assistant_cheap (cheap, read-only) before moving to the
+capabilities of assistant_low (read-only) before moving to the
 high-effort spec writing with assistant_heavy, keeping the draft ephemeral
 and easily deletable.
 

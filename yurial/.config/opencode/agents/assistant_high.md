@@ -11,8 +11,6 @@ permission:
     "sleep*": deny
   task:
     "*": deny
-    assistant_stupid: allow
-    assistant_cheap: allow
     assistant_low: allow
 prompt: "{file:./rules/assistant.md}"
 ---
