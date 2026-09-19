@@ -38,6 +38,7 @@ alias opencode-direct="AI_BASE_URL=$ZAI_ORIGINAL_URL AI_TOKEN_VK= opencode"
 # capability detection, forcing truecolor output which GNU screen 4.x drops.
 # Stripping the remote markers lets TERM=screen-256color enable 256-color mode.
 alias opencode="env -u SSH_CONNECTION -u SSH_CLIENT -u SSH_TTY -u MOSH_CONNECTION opencode attach http://127.0.0.1:4096"
+alias opencode-restart="systemctl --user restart opencode-server.service && systemctl --user status opencode-server.service --no-pager -n 3"
 
 pretty() {
     echo "$1" | sed 's/\\n/\n/g'
