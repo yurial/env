@@ -56,6 +56,33 @@
           "primeTimeRetry": true
         }
       }
+    },
+    "keydealer" : {
+      "options": {
+        "baseURL": "{env:AI_KEYDEALER_URL}",
+        "apiKey": "{env:AI_KEYDEALER_KEY}",
+        "headerTimeout": 600000,
+        "chunkTimeout": 600000,
+        "retries": 1000000
+      },
+      "models": {
+        "gpt-6-astra": {
+          "id": "gpt-6-astra",
+          "limit": {
+            "context": 1000000,
+            "output": 128000
+          },
+          "name": "gpt-6-astra"
+        },
+        "sonnet-5": {
+          "id": "sonnet-5",
+          "limit": {
+            "context": 1000000,
+            "output": 128000
+          },
+          "name": "sonnet-5"
+        }
+      }
     }
   },
   "disabled_providers": [
