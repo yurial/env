@@ -18,5 +18,6 @@ permission:
     assistant_high: allow
     assistant_max: allow
     assistant_heavy: allow
+    assistant_astra: allow
 prompt: "{file:./rules/main.md}"
 ---
