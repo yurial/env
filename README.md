@@ -13,7 +13,7 @@
   - opencode: `.config/opencode/` (см. ниже)
   - systemd: `.config/systemd/user/opencode-server.service` — user-сервис `opencode serve` (порт 4096, только localhost; `systemctl --user status|restart opencode-server`; автостарт при загрузке — при включённом `loginctl enable-linger`)
   - `bin/ansi-table.sh` — печатает матрицу 16x16 сочетаний ANSI фон/текст (подбор пар для темы)
-- `yurial/.config/opencode/themes/yurial.json` — кастомная тема TUI opencode (16 ANSI-цветов, уникальные контрастные пары фон/текст; выбор в `/themes`). Тема рассчитана на 256-цветной режим (`TERM=screen-256color`); alias `opencode` в `.bashrc` обходит баг opentui 0.4.5 (remote-детект по `SSH_*` отключает 256-цветность). Функции `oc` и `ocj` в `.bashrc` шлют задачи в локальный сервер opencode через `opencode run --attach http://127.0.0.1:4096` (`ocj` — с `--format json`).
+- `yurial/.config/opencode/themes/yurial.json` — кастомная тема TUI opencode (16 ANSI-цветов, уникальные контрастные пары фон/текст; выбор в `/themes`). Тема рассчитана на 256-цветной режим (`TERM=screen-256color`); alias `opencode` в `.bashrc` обходит баг opentui 0.4.5 (remote-детект по `SSH_*` отключает 256-цветность). Alias `opencode` подключает TUI к локальному серверу (`opencode attach http://127.0.0.1:4096`).
 - `iu.diachenko` — симлинк на `yurial/`: `./install.sh iu.diachenko` ставит те же конфиги одноимённому пользователю. В обход `install.sh all` не попадает (`find -type d` не следует по симлинкам).
 
 ## Установка
