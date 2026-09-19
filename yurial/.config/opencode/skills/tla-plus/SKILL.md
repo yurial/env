@@ -94,7 +94,7 @@ When authoring a TLA+ spec with the `tla-plus` skill, follow this delegation wor
    approved.
 
 2. **Generate with assistant_heavy, iterate with TLC.** Once the research draft is
-   ready, use `assistant_heavy` (on zai/heavy with reasoningEffort
+   ready, use `assistant_heavy` (on myzai/heavy with reasoningEffort
    max) to author or update the TLA+ spec module and its cfg models according
    to the template (section 3) and writing rules (sections 4-7). The
    heavy↔low iteration loop is led by assistant_heavy itself: subagents can

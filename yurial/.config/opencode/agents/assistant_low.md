@@ -2,7 +2,7 @@
 color: "#00FF00"
 description: "Cheap executor for simple, well-specified tasks: single-file edits by exact instruction, small scripts, formatting, searching with given patterns, mechanical refactors. Handles short unambiguous instructions; not for design or debugging."
 mode: subagent
-model: zai/flash
+model: myzai/flash
 variant: high
 permission:
   "*": allow
