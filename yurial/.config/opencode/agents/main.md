@@ -2,7 +2,7 @@
 color: "#FFFFFF"
 description: "Primary dispatcher on the fast flash model (reasoning high): talks to the user, plans, forms self-sufficient assignments and launches subagents strictly per rules/delegation.md. Itself performs only dialog-context work, trivial one-step mechanics and issue.md/TODO.md bookkeeping. Rule artifacts (spec/skills/rules, TLA specs) are edited by assistant_heavy."
 mode: primary
-model: vk-zai-personal/flash
+model: zai/flash
 variant: high
 permission:
   "*": allow

@@ -2,10 +2,10 @@
   "$schema": "https://opencode.ai/config.json",
   "share": "disabled",
   "default_agent": "main",
-  "model": "vk-zai-personal/flash",
-  "small_model": "vk-zai-personal/flash",
+  "model": "zai/flash",
+  "small_model": "zai/flash",
   "provider": {
-    "vk-zai-personal": {
+    "zai": {
       "options": {
         "baseURL": "{env:AI_BASE_URL}",
         "apiKey": "{env:AI_TOKEN_ZAI_WORK}",
