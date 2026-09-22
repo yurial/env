@@ -118,13 +118,16 @@ Rules:
   living spec files.
 - `Summary`: one line, nouns only — what is fixed, not how.
 - `Reference` is the stable ID other specs cite instead of file paths (section
-  `4` writing rules) and the mandatory prefix of every term ID (section `3a`). It
-  must include the component or library name and may be composite
-  (`library-component`, e.g. `yt-core-bus`); use the composite form whenever
-  the bare component name is ambiguous across libraries. Reference IDs are
-  unique, lowercase, and stable — renaming one means updating the index, every
-  referencing spec's Dependencies, and every term ID carrying the prefix
-  (GLOSSARY.md and spec texts) in the same commit.
+   `4` writing rules) and the mandatory prefix of every term ID (section `3a`). It
+   must include the component or library name and may be composite
+   (`library-component`, e.g. `yt-core-bus`); use the composite form whenever
+   the bare component name is ambiguous across libraries. Reference IDs are
+   unique, stable, and strictly English — lowercase ASCII letters and digits
+   separated by single hyphens; any non-ASCII letter (Cyrillic or any other
+   alphabet) or uppercase letter is a violation, and the whitelist admits no
+   other punctuation (underscore, dot). Renaming one means updating the index,
+   every referencing spec's Dependencies, and every term ID carrying the
+   prefix (GLOSSARY.md and spec texts) in the same commit.
 - Optional extra columns (owner, last-updated) are fine if the team maintains
   them; a stale extra column is worse than no column.
 
@@ -538,8 +541,10 @@ continuing onto an indented next line is an error, including a
 continuation of a line that already carries an ID error); the flat-list
 rule — prefixed entries form a flat list without indentation or nested
 children, an indented child entry is an error, and hierarchy is
-expressed by multi-level IDs only — plus index path existence with
-valid Status values, and glossary checks: term ID language — any
+   expressed by multi-level IDs only — plus index path existence with
+   valid Status values, index Reference IDs whitelist-checked (lowercase
+   ASCII letters and digits, single hyphens; anything else is an error),
+   and glossary checks: term ID language — any
 non-ASCII letter (Cyrillic or any other alphabet) or uppercase letter
 in either part of the ID is an error — plus alphabetical order with
 resolvable prefixes (a glossary linted with no collected index
@@ -726,6 +731,8 @@ three places together (section `4` preamble).
   — one canonical, the other a pointer.
 - Colocated `<library>/<component>/SPEC.md` missing from the index.
 - Index rows for deleted/moved files; stale Status values.
+- Non-English index reference: a Cyrillic (or other non-ASCII) letter or an
+  uppercase letter in a Reference — the lint whitelist rejects it.
 
 ### Links and citations
 - Renumbering requirements (breaks external references) — retire IDs instead.
