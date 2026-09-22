@@ -57,12 +57,21 @@
 # index.md checks:
 #   - row paths exist; Status is draft or stable; Reference is a lowercase
 #     hyphen-separated unique ID.
-# GLOSSARY.md checks:
-#   - term IDs are lowercase <reference>/<term>; alphabetical order;
-#     Defined in equals the term prefix (optionally with requirement IDs);
-#     the prefix resolves against the collected index references — with
-#     none collected, that resolution is skipped with a warning (exit 1
-#     when no errors).
+# GLOSSARY.md checks (one finding of one class per term ID row):
+#   - term ID form — the structure <reference>/<term>: exactly one
+#     slash, both parts non-empty; a form violation is reported alone
+#     (case and alphabet belong to the language check below);
+#   - term ID language — strictly English: any non-ASCII letter
+#     (Cyrillic or any other alphabet) or uppercase letter in either
+#     part of a structurally valid ID is an error "term ID must be
+#     strictly English (<term ID>)"; digits and hyphens are allowed in
+#     both parts; the check covers GLOSSARY.md rows only — term-ID
+#     language in spec texts is not scanned (semantic pass, review);
+#     an ID valid in both checks proceeds to the remaining checks;
+#   - alphabetical order; Defined in equals the term prefix (optionally
+#     with requirement IDs); the prefix resolves against the collected
+#     index references — with none collected, that resolution is
+#     skipped with a warning (exit 1 when no errors).
 #
 # Findings go to stderr; warnings carry a "warning:" prefix. Exit status:
 # 0 — clean, 1 — warnings but no errors, 2 — lint errors; a usage error
@@ -382,8 +391,25 @@ lint_glossary() {
             for (i = 2; i <= 4; i++) f[i] = trim(f[i])
             term = f[2]; def = f[3]; where = f[4]
             if (term == "Term" || term == "") next
-            if (term !~ /^[a-z0-9-]+\/[a-z0-9-]+$/) {
+            # Form: the structure <reference>/<term> only — exactly
+            # one slash, both parts non-empty. Case and alphabet
+            # belong to the language check below; one finding of one
+            # class per row: a form error is reported alone and the
+            # row goes no further.
+            if (term !~ /^[^/]+\/[^/]+$/) {
                 err(NR, "term ID must be lowercase <reference>/<term>: " term)
+                next
+            }
+            # Language: strictly English — both parts lowercase ASCII
+            # letters, digits, hyphens. Any non-ASCII letter (Cyrillic
+            # or any other alphabet — anything outside printable
+            # ASCII) or any uppercase letter in either part of a
+            # structurally valid ID is a language error; the row goes
+            # no further either. Covers GLOSSARY.md rows only —
+            # term-ID language in spec texts is not scanned
+            # (semantic pass, review).
+            if (term ~ /[A-Z]/ || term ~ /[^ -~]/) {
+                err(NR, "term ID must be strictly English (" term ")")
                 next
             }
             if (prev != "" && term < prev)

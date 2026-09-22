@@ -144,8 +144,14 @@ Rules:
   strictly English, at every occurrence — glossary, Definitions sections,
   requirement text. The prefix must equal an existing reference from
   specs/index.md; the bare short form (`connection`) is never used.
-  Strictly English applies to the term IDs; the Definition text and the
-  glossary prose follow the project's spec language (section `4`).
+  Strictly English is mechanical: both parts of the ID (reference prefix
+  and term) are lowercase ASCII letters, digits, and hyphens; any
+  non-ASCII letter (Cyrillic or any other alphabet) or uppercase letter
+  in either part is a violation at every occurrence, and mixed-alphabet
+  term IDs (`очередь/lease`, `queue/очередь`) are forbidden. The lint
+  enforces this on GLOSSARY.md rows; in spec texts it is a semantic-pass
+  and review check. The Definition text and the glossary prose follow
+  the project's spec language (section `4`).
 - Alphabetical order by full term ID, always — a glossary is looked up, not
   read.
 - One row per term ID. `Defined in` cites the owning reference — which must
@@ -189,7 +195,8 @@ Out (non-goals): <what this component deliberately does not do>.
 
 ## Definitions
 Terms used with precise meaning, each a full ID `<reference>/<term>` (e.g.
-yt-core-bus/connection); English only.
+yt-core-bus/connection); English only — lowercase ASCII letters, digits, and
+hyphens in both parts.
 
 ## Interface
 Signatures, endpoints, CLI verbs, message schemas, config keys — the
@@ -335,7 +342,11 @@ any format rule updates all three places in the same commit:
 - **Terms are full IDs, strictly English.** Every term is written as
   `<reference>/<term>` (e.g. `yt-core-bus/connection`) at every occurrence —
   Definitions, requirement bodies, constraints, GLOSSARY.md; the short form is
-  never used. Term IDs are English whatever the spec's language is (language
+  never used. Strictly English is mechanical: both parts of the ID are
+  lowercase ASCII letters, digits, and hyphens; any non-ASCII letter or
+  uppercase letter in either part is a violation at every occurrence, and
+  mixed-alphabet IDs (`очередь/lease`, `queue/очередь`) are forbidden. Term
+  IDs are English whatever the spec's language is (language
   rule below). The prefix must resolve to an existing reference (from
   specs/index.md, or the component name declared in the spec header in small
   projects without an index).
@@ -528,10 +539,13 @@ continuation of a line that already carries an ID error); the flat-list
 rule — prefixed entries form a flat list without indentation or nested
 children, an indented child entry is an error, and hierarchy is
 expressed by multi-level IDs only — plus index path existence with
-valid Status values, and glossary alphabetical order with resolvable
-prefixes (a glossary linted with no collected index references gets a
-`warning:` message — prefix resolution skipped — that counts toward
-the exit status: warnings yield `1` when no errors occurred). It also
+valid Status values, and glossary checks: term ID language — any
+non-ASCII letter (Cyrillic or any other alphabet) or uppercase letter
+in either part of the ID is an error — plus alphabetical order with
+resolvable prefixes (a glossary linted with no collected index
+references gets a `warning:` message — prefix resolution skipped —
+that counts toward the exit status: warnings yield `1` when no
+errors occurred). It also
 reports an error when any line outside the Configuration and Examples
 sections carries a bare numeric literal — a number starting a word,
 its token running over trailing letters (`3x`, `30s`) and decimal
@@ -579,8 +593,11 @@ After editing any spec, run the semantic pass over the *related* specs
    specs/index.md; a renamed/deleted reference leaves no dangling citations or
    orphaned prefixes (paths in citations are themselves a finding). Same for
    specs/GLOSSARY.md: rows must cite existing references (matching the term's
-   prefix), stay alphabetical by full ID, be strictly English, and cover every
-   term the changed spec introduced or stopped using.
+   prefix), stay alphabetical by full ID, and cover every term the changed
+   spec introduced or stopped using; the term-ID language of glossary rows is
+   enforced mechanically (the `speclint` pass above), and in spec texts
+   (Definitions, requirement bodies) it remains a semantic-pass and review
+   check.
 - **Link symmetry and semantic validity**: every Dependencies entry in the
    changed spec has the matching Used-by entry in the referenced spec (and
    vice versa for specs whose Used by lists the changed reference); each
@@ -723,8 +740,12 @@ three places together (section `4` preamble).
 
 ### Terms and glossary
 - Bare or non-English terms: `connection` instead of `yt-core-bus/connection`,
-  a translated term, or a prefix naming no reference in the index — the full
-  English ID is mandatory at every occurrence (sections `3a`, `4`).
+  a translated term, or a prefix naming no reference in the index; a
+  Cyrillic (or other non-ASCII) letter in either part (`queue/очередь`),
+  a mixed-alphabet ID (`очередь/lease`), or an uppercase letter
+  (`auth/Lease`) — the full English ID (lowercase ASCII letters, digits,
+  and hyphens in both parts) is mandatory at every occurrence
+  (sections `3a`, `4`).
 - Anglicisms in non-English spec prose: an English borrowing where the
   spec's language has a native word — use the native word, or introduce
   the concept as a defined term; the only verbatim English is term IDs
