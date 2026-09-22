@@ -331,6 +331,62 @@ run_lint "$fx/specs/index.md"
 check_case "index: invalid Status — error" 2 \
     "Status must be draft or stable, got: deprecated"
 
+# --- index Reference ID checks ---------------------------------------------
+
+new_fixture index-ref-cyr
+std_index
+cat > "$fx/specs/index.md" <<'EOF'
+# Specification Index
+
+| Path | Reference | Status | Summary |
+|---|---|---|---|
+| specs/queue.md | очередь-core | draft | Persistent queue delivery guarantees |
+EOF
+run_lint "$fx/specs/index.md"
+check_case "index: Cyrillic Reference (очередь-core) — ID error" 2 \
+    "Reference must be a lowercase hyphen-separated ID: очередь-core"
+
+new_fixture index-ref-upper
+std_index
+cat > "$fx/specs/index.md" <<'EOF'
+# Specification Index
+
+| Path | Reference | Status | Summary |
+|---|---|---|---|
+| specs/queue.md | Auth-core | draft | Persistent queue delivery guarantees |
+EOF
+run_lint "$fx/specs/index.md"
+check_case "index: uppercase Reference (Auth-core) — ID error" 2 \
+    "Reference must be a lowercase hyphen-separated ID: Auth-core"
+
+new_fixture index-ref-punct
+std_index
+cat > "$fx/specs/index.md" <<'EOF'
+# Specification Index
+
+| Path | Reference | Status | Summary |
+|---|---|---|---|
+| specs/queue.md | auth_core | draft | Persistent queue delivery guarantees |
+| specs/bus.md | auth.core | draft | Token issuance contract |
+EOF
+run_lint "$fx/specs/index.md"
+check_case "index: underscore and dot in Reference (auth_core, auth.core) — ID error" 2 \
+    "Reference must be a lowercase hyphen-separated ID: auth_core" \
+    "Reference must be a lowercase hyphen-separated ID: auth.core"
+
+new_fixture index-ref-valid
+std_index
+cat > "$fx/specs/index.md" <<'EOF'
+# Specification Index
+
+| Path | Reference | Status | Summary |
+|---|---|---|---|
+| specs/queue.md | yt-core-bus2 | draft | Persistent queue delivery guarantees |
+EOF
+run_lint "$fx/specs/index.md"
+check_case "index: valid Reference with digits and hyphens (yt-core-bus2) — clean" 0 \
+    "!Reference must be a lowercase"
+
 # -----------------------------------------------------------------------------
 
 printf '%d run, %d failed\n' "$total" "$failed"
