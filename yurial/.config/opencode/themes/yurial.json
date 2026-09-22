@@ -53,6 +53,34 @@
       "fg": "transparent",
       "bg": "background"
     },
+    "agent.color.one": {
+      "fg": "secondary",
+      "bg": "transparent"
+    },
+    "agent.color.two": {
+      "fg": "accent",
+      "bg": "transparent"
+    },
+    "agent.color.three": {
+      "fg": "success",
+      "bg": "transparent"
+    },
+    "agent.color.four": {
+      "fg": "warning",
+      "bg": "transparent"
+    },
+    "agent.color.five": {
+      "fg": "primary",
+      "bg": "transparent"
+    },
+    "agent.color.six": {
+      "fg": "error",
+      "bg": "transparent"
+    },
+    "agent.color.seven": {
+      "fg": "info",
+      "bg": "transparent"
+    },
     "dialog.panel": {
       "fg": "transparent",
       "bg": "backgroundPanel"
@@ -417,6 +445,22 @@
       "fg": "borderActive",
       "bg": "transparent"
     },
+    "message.discarded.text": {
+      "fg": "#c0c0c096",
+      "bg": "transparent"
+    },
+    "message.discarded.marker": {
+      "fg": "textMuted",
+      "bg": "transparent"
+    },
+    "message.discarded.pending": {
+      "fg": "text",
+      "bg": "transparent"
+    },
+    "message.discarded.error": {
+      "fg": "error",
+      "bg": "transparent"
+    },
     "footer.panel": {
       "fg": "transparent",
       "bg": "backgroundPanel"
@@ -492,6 +536,15 @@
     "sidebar.getting-started": {
       "fg": "transparent",
       "bg": "backgroundElement"
+    },
+    "sidebar.discard.header": {
+      "fg": "text",
+      "bg": "transparent",
+      "attributes": ["bold"]
+    },
+    "sidebar.discard.row": {
+      "fg": "textMuted",
+      "bg": "transparent"
     },
     "sidebar.files.added": {
       "fg": "diffAdded",
