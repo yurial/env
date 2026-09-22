@@ -1,267 +1,1117 @@
 {
   "$schema": "https://opencode.ai/theme.json",
   "defs": {
-    "cPrimary": "#00ffff",
-    "cSecondary": "#00ff00",
-    "cAccent": "#ffffff",
-    "cError": "#ffffff",
-    "cWarning": "#ffff00",
-    "cSuccess": "#00ff00",
-    "cInfo": "#c0c0c0",
-    "cText": "#ffffff",
-    "cTextMuted": "#c0c0c0",
-    "cSelectedListItemText": "#0000ff",
-    "cBackground": "#000000",
-    "cBackgroundPanel": "#808000",
-    "cBackgroundElement": "#000080",
-    "cBackgroundMenu": "#800000",
-    "cBorder": "#00ffff",
-    "cBorderActive": "#00ffff",
-    "cBorderSubtle": "#c0c0c0",
-    "cDiffAdded": "#00ff00",
-    "cDiffRemoved": "#ffffff",
-    "cDiffContext": "#00ffff",
-    "cDiffHunkHeader": "#ffff00",
-    "cDiffHighlightAdded": "#c0c0c0",
-    "cDiffHighlightRemoved": "#c0c0c0",
-    "cDiffAddedBg": "#008000",
-    "cDiffRemovedBg": "#800000",
-    "cDiffContextBg": "#808080",
-    "cDiffLineNumber": "#00ff00",
-    "cDiffAddedLineNumberBg": "#808000",
-    "cDiffRemovedLineNumberBg": "#800080",
-    "cMarkdownText": "#ffff00",
-    "cMarkdownHeading": "#ffff00",
-    "cMarkdownLink": "#00ffff",
-    "cMarkdownLinkText": "#00ff00",
-    "cMarkdownCode": "#ffff87",
-    "cMarkdownBlockQuote": "#00ffff",
-    "cMarkdownEmph": "#c0c0c0",
-    "cMarkdownStrong": "#ffff00",
-    "cMarkdownHorizontalRule": "#ffffff",
-    "cMarkdownListItem": "#ffff00",
-    "cMarkdownListEnumeration": "#ffffff",
-    "cMarkdownImage": "#ffff00",
-    "cMarkdownImageText": "#ffff00",
-    "cMarkdownCodeBlock": "#00ffff",
-    "cSyntaxComment": "#c0c0c0",
-    "cSyntaxKeyword": "#ffffff",
-    "cSyntaxFunction": "#00ffff",
-    "cSyntaxVariable": "#ffffff",
-    "cSyntaxString": "#00ff00",
-    "cSyntaxNumber": "#ffff00",
-    "cSyntaxType": "#ffff00",
-    "cSyntaxOperator": "#00ffff",
-    "cSyntaxPunctuation": "#00ff00"
+    "primary": "#00ffff",
+    "secondary": "#00ff00",
+    "accent": "#ffffff",
+    "error": "#ffffff",
+    "warning": "#ffff00",
+    "success": "#00ff00",
+    "info": "#c0c0c0",
+    "text": "#ffffff",
+    "textMuted": "#c0c0c0",
+    "selectedListItemText": "#0000ff",
+    "background": "#000000",
+    "backgroundPanel": "#808000",
+    "backgroundElement": "#000080",
+    "backgroundMenu": "#800000",
+    "border": "#00ffff",
+    "borderActive": "#00ffff",
+    "borderSubtle": "#c0c0c0",
+    "diffAdded": "#00ff00",
+    "diffRemoved": "#ffffff",
+    "diffContext": "#00ffff",
+    "diffHighlightAdded": "#c0c0c0",
+    "diffHighlightRemoved": "#c0c0c0",
+    "diffAddedBg": "#008000",
+    "diffRemovedBg": "#800000",
+    "diffContextBg": "#808080",
+    "diffLineNumber": "#00ff00",
+    "diffAddedLineNumberBg": "#808000",
+    "diffRemovedLineNumberBg": "#800080",
+    "markdownText": "#ffff00",
+    "markdownHeading": "#ffff00",
+    "markdownLink": "#00ffff",
+    "markdownLinkText": "#00ff00",
+    "markdownCode": "#ffff87",
+    "markdownBlockQuote": "#00ffff",
+    "markdownEmph": "#c0c0c0",
+    "markdownStrong": "#ffff00",
+    "markdownListItem": "#ffff00",
+    "syntaxComment": "#c0c0c0",
+    "syntaxKeyword": "#ffffff",
+    "syntaxFunction": "#00ffff",
+    "syntaxVariable": "#ffffff",
+    "syntaxString": "#00ff00",
+    "syntaxNumber": "#ffff00",
+    "syntaxType": "#ffff00",
+    "syntaxOperator": "#00ffff",
+    "syntaxPunctuation": "#00ff00"
   },
   "theme": {
-    "primary": {
-      "dark": "cPrimary",
-      "light": "cPrimary"
+    "app.background": {
+      "fg": "transparent",
+      "bg": "background"
     },
-    "secondary": {
-      "dark": "cSecondary",
-      "light": "cSecondary"
+    "dialog.panel": {
+      "fg": "transparent",
+      "bg": "backgroundPanel"
     },
-    "accent": {
-      "dark": "cAccent",
-      "light": "cAccent"
+    "dialog.underlay": {
+      "fg": "transparent",
+      "bg": "#00000096"
     },
-    "error": {
-      "dark": "cError",
-      "light": "cError"
+    "dialog.title": {
+      "fg": "text",
+      "bg": "transparent"
     },
-    "warning": {
-      "dark": "cWarning",
-      "light": "cWarning"
+    "dialog.body": {
+      "fg": "text",
+      "bg": "transparent"
     },
-    "success": {
-      "dark": "cSuccess",
-      "light": "cSuccess"
+    "dialog.muted": {
+      "fg": "textMuted",
+      "bg": "transparent"
     },
-    "info": {
-      "dark": "cInfo",
-      "light": "cInfo"
+    "dialog.action": {
+      "fg": "selectedListItemText",
+      "bg": "primary"
     },
-    "text": {
-      "dark": "cText",
-      "light": "cText"
+    "dialog.link": {
+      "fg": "primary",
+      "bg": "transparent"
     },
-    "textMuted": {
-      "dark": "cTextMuted",
-      "light": "cTextMuted"
+    "dialog.notice": {
+      "fg": "accent",
+      "bg": "transparent"
     },
-    "selectedListItemText": {
-      "dark": "cSelectedListItemText",
-      "light": "cSelectedListItemText"
+    "dialog.error": {
+      "fg": "error",
+      "bg": "backgroundPanel"
     },
-    "background": {
-      "dark": "cBackground",
-      "light": "cBackground"
+    "dialog.retry": {
+      "fg": "selectedListItemText",
+      "bg": "backgroundPanel"
     },
-    "backgroundPanel": {
-      "dark": "cBackgroundPanel",
-      "light": "cBackgroundPanel"
+    "dialog.route.warning": {
+      "fg": "warning",
+      "bg": "transparent"
     },
-    "backgroundElement": {
-      "dark": "cBackgroundElement",
-      "light": "cBackgroundElement"
+    "dialog.route.home": {
+      "fg": "text",
+      "bg": "backgroundElement"
     },
-    "backgroundMenu": {
-      "dark": "cBackgroundMenu",
-      "light": "cBackgroundMenu"
+    "dialog.session.gutter": {
+      "fg": "accent",
+      "bg": "transparent"
     },
-    "border": {
-      "dark": "cBorder",
-      "light": "cBorder"
+    "dialog.session.deleted": {
+      "fg": "transparent",
+      "bg": "error"
     },
-    "borderActive": {
-      "dark": "cBorderActive",
-      "light": "cBorderActive"
+    "dialog.changes.list": {
+      "fg": "transparent",
+      "bg": "backgroundElement"
     },
-    "borderSubtle": {
-      "dark": "cBorderSubtle",
-      "light": "cBorderSubtle"
+    "dialog.changes.added": {
+      "fg": "diffAdded",
+      "bg": "transparent"
     },
-    "diffAdded": {
-      "dark": "cDiffAdded",
-      "light": "cDiffAdded"
+    "dialog.changes.removed": {
+      "fg": "diffRemoved",
+      "bg": "transparent"
     },
-    "diffRemoved": {
-      "dark": "cDiffRemoved",
-      "light": "cDiffRemoved"
+    "dialog.console.email": {
+      "fg": "accent",
+      "bg": "transparent"
     },
-    "diffContext": {
-      "dark": "cDiffContext",
-      "light": "cDiffContext"
+    "dialog.plugins.active": {
+      "fg": "success",
+      "bg": "transparent"
     },
-    "diffHunkHeader": {
-      "dark": "cDiffHunkHeader",
-      "light": "cDiffHunkHeader"
+    "dialog.plugins.inactive": {
+      "fg": "error",
+      "bg": "transparent"
     },
-    "diffHighlightAdded": {
-      "dark": "cDiffHighlightAdded",
-      "light": "cDiffHighlightAdded"
+    "dialog.mcp.enabled": {
+      "fg": "success",
+      "bg": "transparent"
     },
-    "diffHighlightRemoved": {
-      "dark": "cDiffHighlightRemoved",
-      "light": "cDiffHighlightRemoved"
+    "dialog.provider.connected": {
+      "fg": "success",
+      "bg": "transparent"
     },
-    "diffAddedBg": {
-      "dark": "cDiffAddedBg",
-      "light": "cDiffAddedBg"
+    "dialog.status.ok": {
+      "fg": "success",
+      "bg": "transparent"
     },
-    "diffRemovedBg": {
-      "dark": "cDiffRemovedBg",
-      "light": "cDiffRemovedBg"
+    "dialog.status.warn": {
+      "fg": "warning",
+      "bg": "transparent"
     },
-    "diffContextBg": {
-      "dark": "cDiffContextBg",
-      "light": "cDiffContextBg"
+    "dialog.status.error": {
+      "fg": "error",
+      "bg": "transparent"
     },
-    "diffLineNumber": {
-      "dark": "cDiffLineNumber",
-      "light": "cDiffLineNumber"
+    "dialog.debug.copied": {
+      "fg": "success",
+      "bg": "transparent"
     },
-    "diffAddedLineNumberBg": {
-      "dark": "cDiffAddedLineNumberBg",
-      "light": "cDiffAddedLineNumberBg"
+    "dialog.export.option": {
+      "fg": "text",
+      "bg": "transparent"
     },
-    "diffRemovedLineNumberBg": {
-      "dark": "cDiffRemovedLineNumberBg",
-      "light": "cDiffRemovedLineNumberBg"
+    "dialog.export.option.active": {
+      "fg": "primary",
+      "bg": "backgroundElement"
     },
-    "markdownText": {
-      "dark": "cMarkdownText",
-      "light": "cMarkdownText"
+    "dialog.prompt.cursor.busy": {
+      "fg": "backgroundElement",
+      "bg": "transparent"
     },
-    "markdownHeading": {
-      "dark": "cMarkdownHeading",
-      "light": "cMarkdownHeading"
+    "dialog.select.filter": {
+      "fg": "textMuted",
+      "bg": "backgroundPanel"
     },
-    "markdownLink": {
-      "dark": "cMarkdownLink",
-      "light": "cMarkdownLink"
+    "dialog.select.filter.cursor": {
+      "fg": "primary",
+      "bg": "transparent"
     },
-    "markdownLinkText": {
-      "dark": "cMarkdownLinkText",
-      "light": "cMarkdownLinkText"
+    "dialog.select.row": {
+      "fg": "text",
+      "bg": "transparent"
     },
-    "markdownCode": {
-      "dark": "cMarkdownCode",
-      "light": "cMarkdownCode"
+    "dialog.select.row.selected": {
+      "fg": "selectedListItemText",
+      "bg": "primary"
     },
-    "markdownBlockQuote": {
-      "dark": "cMarkdownBlockQuote",
-      "light": "cMarkdownBlockQuote"
+    "dialog.select.row.selected.unfocused": {
+      "fg": "textMuted",
+      "bg": "backgroundElement"
     },
-    "markdownEmph": {
-      "dark": "cMarkdownEmph",
-      "light": "cMarkdownEmph"
+    "dialog.select.category": {
+      "fg": "accent",
+      "bg": "transparent"
     },
-    "markdownStrong": {
-      "dark": "cMarkdownStrong",
-      "light": "cMarkdownStrong"
+    "dialog.select.footer": {
+      "fg": "text",
+      "bg": "transparent"
     },
-    "markdownHorizontalRule": {
-      "dark": "cMarkdownHorizontalRule",
-      "light": "cMarkdownHorizontalRule"
+    "dialog.select.footer.label": {
+      "fg": "textMuted",
+      "bg": "transparent"
     },
-    "markdownListItem": {
-      "dark": "cMarkdownListItem",
-      "light": "cMarkdownListItem"
+    "dialog.select.footer.active": {
+      "fg": "selectedListItemText",
+      "bg": "primary"
     },
-    "markdownListEnumeration": {
-      "dark": "cMarkdownListEnumeration",
-      "light": "cMarkdownListEnumeration"
+    "dialog.select.footer.disabled": {
+      "fg": "textMuted",
+      "bg": "transparent"
     },
-    "markdownImage": {
-      "dark": "cMarkdownImage",
-      "light": "cMarkdownImage"
+    "dialog.select.marker": {
+      "fg": "primary",
+      "bg": "transparent"
     },
-    "markdownImageText": {
-      "dark": "cMarkdownImageText",
-      "light": "cMarkdownImageText"
+    "autocomplete.menu": {
+      "fg": "transparent",
+      "bg": "backgroundMenu"
     },
-    "markdownCodeBlock": {
-      "dark": "cMarkdownCodeBlock",
-      "light": "cMarkdownCodeBlock"
+    "autocomplete.menu.border": {
+      "fg": "border",
+      "bg": "transparent"
     },
-    "syntaxComment": {
-      "dark": "cSyntaxComment",
-      "light": "cSyntaxComment"
+    "autocomplete.row": {
+      "fg": "text",
+      "bg": "transparent"
     },
-    "syntaxKeyword": {
-      "dark": "cSyntaxKeyword",
-      "light": "cSyntaxKeyword"
+    "autocomplete.row.selected": {
+      "fg": "selectedListItemText",
+      "bg": "primary"
     },
-    "syntaxFunction": {
-      "dark": "cSyntaxFunction",
-      "light": "cSyntaxFunction"
+    "autocomplete.muted": {
+      "fg": "textMuted",
+      "bg": "transparent"
     },
-    "syntaxVariable": {
-      "dark": "cSyntaxVariable",
-      "light": "cSyntaxVariable"
+    "prompt.container": {
+      "fg": "transparent",
+      "bg": "backgroundElement"
     },
-    "syntaxString": {
-      "dark": "cSyntaxString",
-      "light": "cSyntaxString"
+    "prompt.container.border": {
+      "fg": "border",
+      "bg": "transparent"
     },
-    "syntaxNumber": {
-      "dark": "cSyntaxNumber",
-      "light": "cSyntaxNumber"
+    "prompt.shell.border": {
+      "fg": "primary",
+      "bg": "transparent"
     },
-    "syntaxType": {
-      "dark": "cSyntaxType",
-      "light": "cSyntaxType"
+    "prompt.text": {
+      "fg": "text",
+      "bg": "transparent"
     },
-    "syntaxOperator": {
-      "dark": "cSyntaxOperator",
-      "light": "cSyntaxOperator"
+    "prompt.placeholder": {
+      "fg": "textMuted",
+      "bg": "transparent"
     },
-    "syntaxPunctuation": {
-      "dark": "cSyntaxPunctuation",
-      "light": "cSyntaxPunctuation"
+    "prompt.cursor": {
+      "fg": "text",
+      "bg": "transparent"
+    },
+    "prompt.cursor.disabled": {
+      "fg": "transparent",
+      "bg": "backgroundElement"
+    },
+    "prompt.notice": {
+      "fg": "accent",
+      "bg": "transparent"
+    },
+    "prompt.chip": {
+      "fg": "text",
+      "bg": "backgroundElement"
+    },
+    "prompt.meta": {
+      "fg": "textMuted",
+      "bg": "transparent"
+    },
+    "prompt.retry": {
+      "fg": "error",
+      "bg": "transparent"
+    },
+    "prompt.interrupt": {
+      "fg": "primary",
+      "bg": "transparent"
+    },
+    "prompt.editor.pending": {
+      "fg": "secondary",
+      "bg": "transparent"
+    },
+    "prompt.extmark.file": {
+      "fg": "warning",
+      "bg": "transparent"
+    },
+    "prompt.extmark.agent": {
+      "fg": "secondary",
+      "bg": "transparent"
+    },
+    "prompt.extmark.paste": {
+      "fg": "selectedListItemText",
+      "bg": "warning"
+    },
+    "message.user.body": {
+      "fg": "text",
+      "bg": "backgroundPanel"
+    },
+    "message.user.body.hover": {
+      "fg": "text",
+      "bg": "backgroundElement"
+    },
+    "message.user.badge": {
+      "fg": "selectedListItemText",
+      "bg": "secondary"
+    },
+    "message.user.file": {
+      "fg": "textMuted",
+      "bg": "backgroundElement"
+    },
+    "message.assistant.body": {
+      "fg": "text",
+      "bg": "transparent"
+    },
+    "message.assistant.meta": {
+      "fg": "textMuted",
+      "bg": "transparent"
+    },
+    "message.assistant.meta.mode": {
+      "fg": "text",
+      "bg": "transparent"
+    },
+    "message.assistant.meta.variant": {
+      "fg": "warning",
+      "bg": "transparent"
+    },
+    "message.system.body": {
+      "fg": "textMuted",
+      "bg": "transparent"
+    },
+    "message.reasoning.header": {
+      "fg": "warning",
+      "bg": "transparent"
+    },
+    "message.reasoning.body": {
+      "fg": "textMuted",
+      "bg": "transparent"
+    },
+    "message.tool.card": {
+      "fg": "transparent",
+      "bg": "backgroundPanel"
+    },
+    "message.tool.card.hover": {
+      "fg": "transparent",
+      "bg": "backgroundMenu"
+    },
+    "message.tool.card.border": {
+      "fg": "background",
+      "bg": "transparent"
+    },
+    "message.tool.gutter": {
+      "fg": "textMuted",
+      "bg": "transparent"
+    },
+    "message.tool.header": {
+      "fg": "textMuted",
+      "bg": "transparent"
+    },
+    "message.tool.body": {
+      "fg": "text",
+      "bg": "transparent"
+    },
+    "message.tool.body.pending": {
+      "fg": "textMuted",
+      "bg": "transparent"
+    },
+    "message.tool.status.pending": {
+      "fg": "warning",
+      "bg": "transparent"
+    },
+    "message.tool.status.error": {
+      "fg": "error",
+      "bg": "transparent"
+    },
+    "message.tool.status.done": {
+      "fg": "textMuted",
+      "bg": "transparent"
+    },
+    "message.tool.args.denied": {
+      "fg": "text",
+      "bg": "transparent"
+    },
+    "message.error.panel": {
+      "fg": "transparent",
+      "bg": "backgroundPanel"
+    },
+    "message.error.border": {
+      "fg": "error",
+      "bg": "transparent"
+    },
+    "message.error.body": {
+      "fg": "textMuted",
+      "bg": "transparent"
+    },
+    "message.revert": {
+      "fg": "textMuted",
+      "bg": "backgroundPanel"
+    },
+    "message.revert.hover": {
+      "fg": "textMuted",
+      "bg": "backgroundElement"
+    },
+    "message.queued": {
+      "fg": "textMuted",
+      "bg": "transparent"
+    },
+    "message.timestamp": {
+      "fg": "textMuted",
+      "bg": "transparent"
+    },
+    "message.compaction": {
+      "fg": "borderActive",
+      "bg": "transparent"
+    },
+    "footer.panel": {
+      "fg": "transparent",
+      "bg": "backgroundPanel"
+    },
+    "footer.text": {
+      "fg": "text",
+      "bg": "transparent"
+    },
+    "footer.muted": {
+      "fg": "textMuted",
+      "bg": "transparent"
+    },
+    "footer.permission": {
+      "fg": "warning",
+      "bg": "transparent"
+    },
+    "footer.status.ok": {
+      "fg": "success",
+      "bg": "transparent"
+    },
+    "footer.status.warn": {
+      "fg": "warning",
+      "bg": "transparent"
+    },
+    "footer.status.error": {
+      "fg": "error",
+      "bg": "transparent"
+    },
+    "sidebar.panel": {
+      "fg": "transparent",
+      "bg": "backgroundPanel"
+    },
+    "sidebar.dim": {
+      "fg": "transparent",
+      "bg": "#00000046"
+    },
+    "sidebar.text": {
+      "fg": "text",
+      "bg": "transparent"
+    },
+    "sidebar.muted": {
+      "fg": "textMuted",
+      "bg": "transparent"
+    },
+    "sidebar.strong": {
+      "fg": "text",
+      "bg": "transparent"
+    },
+    "sidebar.emphasized": {
+      "fg": "text",
+      "bg": "transparent"
+    },
+    "sidebar.item.open": {
+      "fg": "success",
+      "bg": "transparent"
+    },
+    "sidebar.status.ok": {
+      "fg": "success",
+      "bg": "transparent"
+    },
+    "sidebar.status.warn": {
+      "fg": "warning",
+      "bg": "transparent"
+    },
+    "sidebar.status.error": {
+      "fg": "error",
+      "bg": "transparent"
+    },
+    "sidebar.todo.pending": {
+      "fg": "warning",
+      "bg": "transparent"
+    },
+    "sidebar.getting-started": {
+      "fg": "transparent",
+      "bg": "backgroundElement"
+    },
+    "sidebar.files.added": {
+      "fg": "diffAdded",
+      "bg": "transparent"
+    },
+    "sidebar.files.removed": {
+      "fg": "diffRemoved",
+      "bg": "transparent"
+    },
+    "scrollbar.track": {
+      "fg": "transparent",
+      "bg": "backgroundElement"
+    },
+    "scrollbar.track.overlay": {
+      "fg": "transparent",
+      "bg": "background"
+    },
+    "scrollbar.thumb": {
+      "fg": "border",
+      "bg": "transparent"
+    },
+    "scrollbar.thumb.active": {
+      "fg": "borderActive",
+      "bg": "transparent"
+    },
+    "diff.text": {
+      "fg": "text",
+      "bg": "transparent"
+    },
+    "diff.border": {
+      "fg": "border",
+      "bg": "transparent"
+    },
+    "diff.line.added": {
+      "fg": "text",
+      "bg": "diffAddedBg"
+    },
+    "diff.line.removed": {
+      "fg": "text",
+      "bg": "diffRemovedBg"
+    },
+    "diff.line.context": {
+      "fg": "text",
+      "bg": "diffContextBg"
+    },
+    "diff.sign.added": {
+      "fg": "diffHighlightAdded",
+      "bg": "transparent"
+    },
+    "diff.sign.removed": {
+      "fg": "diffHighlightRemoved",
+      "bg": "transparent"
+    },
+    "diff.gutter": {
+      "fg": "diffLineNumber",
+      "bg": "diffContextBg"
+    },
+    "diff.gutter.added": {
+      "fg": "diffLineNumber",
+      "bg": "diffAddedLineNumberBg"
+    },
+    "diff.gutter.removed": {
+      "fg": "diffLineNumber",
+      "bg": "diffRemovedLineNumberBg"
+    },
+    "diff.banner.added": {
+      "fg": "diffAdded",
+      "bg": "transparent"
+    },
+    "diff.banner.removed": {
+      "fg": "diffRemoved",
+      "bg": "transparent"
+    },
+    "diff.filetree.row": {
+      "fg": "textMuted",
+      "bg": "transparent"
+    },
+    "diff.filetree.row.selected": {
+      "fg": "background",
+      "bg": "primary"
+    },
+    "diff.filetree.row.selected.name": {
+      "fg": "primary",
+      "bg": "transparent"
+    },
+    "markdown.text": {
+      "fg": "markdownText",
+      "bg": "transparent"
+    },
+    "markdown.bg": {
+      "fg": "transparent",
+      "bg": "background"
+    },
+    "markdown.heading": {
+      "fg": "markdownHeading",
+      "bg": "transparent"
+    },
+    "markdown.heading.h1": {
+      "fg": "markdownHeading",
+      "bg": "transparent"
+    },
+    "markdown.strong": {
+      "fg": "markdownStrong",
+      "bg": "transparent"
+    },
+    "markdown.emph": {
+      "fg": "markdownEmph",
+      "bg": "transparent"
+    },
+    "markdown.quote": {
+      "fg": "markdownBlockQuote",
+      "bg": "transparent"
+    },
+    "markdown.list": {
+      "fg": "markdownListItem",
+      "bg": "transparent"
+    },
+    "markdown.code.inline": {
+      "fg": "markdownCode",
+      "bg": "background"
+    },
+    "markdown.code.block": {
+      "fg": "markdownCode",
+      "bg": "transparent"
+    },
+    "markdown.link": {
+      "fg": "markdownLink",
+      "bg": "transparent"
+    },
+    "markdown.link.label": {
+      "fg": "markdownLinkText",
+      "bg": "transparent"
+    },
+    "markdown.label": {
+      "fg": "markdownLinkText",
+      "bg": "transparent"
+    },
+    "markdown.underline": {
+      "fg": "text",
+      "bg": "transparent"
+    },
+    "syntax.default": {
+      "fg": "text",
+      "bg": "transparent"
+    },
+    "syntax.comment": {
+      "fg": "syntaxComment",
+      "bg": "transparent"
+    },
+    "syntax.keyword": {
+      "fg": "syntaxKeyword",
+      "bg": "transparent"
+    },
+    "syntax.keyword.import": {
+      "fg": "syntaxKeyword",
+      "bg": "transparent"
+    },
+    "syntax.escape": {
+      "fg": "syntaxKeyword",
+      "bg": "transparent"
+    },
+    "syntax.tag.attribute": {
+      "fg": "syntaxKeyword",
+      "bg": "transparent"
+    },
+    "syntax.string": {
+      "fg": "syntaxString",
+      "bg": "transparent"
+    },
+    "syntax.number": {
+      "fg": "syntaxNumber",
+      "bg": "transparent"
+    },
+    "syntax.type": {
+      "fg": "syntaxType",
+      "bg": "transparent"
+    },
+    "syntax.type.definition": {
+      "fg": "syntaxType",
+      "bg": "transparent"
+    },
+    "syntax.type.keyword": {
+      "fg": "syntaxType",
+      "bg": "transparent"
+    },
+    "syntax.function": {
+      "fg": "syntaxFunction",
+      "bg": "transparent"
+    },
+    "syntax.variable": {
+      "fg": "syntaxVariable",
+      "bg": "transparent"
+    },
+    "syntax.operator": {
+      "fg": "syntaxOperator",
+      "bg": "transparent"
+    },
+    "syntax.punctuation": {
+      "fg": "syntaxPunctuation",
+      "bg": "transparent"
+    },
+    "syntax.error": {
+      "fg": "error",
+      "bg": "transparent"
+    },
+    "syntax.error.strong": {
+      "fg": "error",
+      "bg": "transparent"
+    },
+    "syntax.comment.error": {
+      "fg": "error",
+      "bg": "transparent"
+    },
+    "syntax.warning": {
+      "fg": "warning",
+      "bg": "transparent"
+    },
+    "syntax.warning.strong": {
+      "fg": "warning",
+      "bg": "transparent"
+    },
+    "syntax.comment.warning": {
+      "fg": "warning",
+      "bg": "transparent"
+    },
+    "syntax.todo": {
+      "fg": "info",
+      "bg": "transparent"
+    },
+    "syntax.comment.todo": {
+      "fg": "info",
+      "bg": "transparent"
+    },
+    "syntax.checked": {
+      "fg": "success",
+      "bg": "transparent"
+    },
+    "syntax.conceal": {
+      "fg": "textMuted",
+      "bg": "transparent"
+    },
+    "syntax.prompt": {
+      "fg": "accent",
+      "bg": "transparent"
+    },
+    "syntax.diff.plus": {
+      "fg": "diffAdded",
+      "bg": "diffAddedBg"
+    },
+    "syntax.diff.minus": {
+      "fg": "diffRemoved",
+      "bg": "diffRemovedBg"
+    },
+    "syntax.diff.delta": {
+      "fg": "diffContext",
+      "bg": "diffContextBg"
+    },
+    "toast.panel": {
+      "fg": "transparent",
+      "bg": "backgroundPanel"
+    },
+    "toast.title": {
+      "fg": "text",
+      "bg": "transparent"
+    },
+    "toast.body": {
+      "fg": "text",
+      "bg": "transparent"
+    },
+    "toast.error.border": {
+      "fg": "error",
+      "bg": "transparent"
+    },
+    "toast.info.border": {
+      "fg": "info",
+      "bg": "transparent"
+    },
+    "toast.success.border": {
+      "fg": "success",
+      "bg": "transparent"
+    },
+    "toast.warning.border": {
+      "fg": "warning",
+      "bg": "transparent"
+    },
+    "permission.panel": {
+      "fg": "transparent",
+      "bg": "backgroundPanel"
+    },
+    "permission.border": {
+      "fg": "warning",
+      "bg": "transparent"
+    },
+    "permission.border.reject": {
+      "fg": "error",
+      "bg": "transparent"
+    },
+    "permission.marker": {
+      "fg": "warning",
+      "bg": "transparent"
+    },
+    "permission.marker.reject": {
+      "fg": "error",
+      "bg": "transparent"
+    },
+    "permission.option": {
+      "fg": "textMuted",
+      "bg": "backgroundMenu"
+    },
+    "permission.option.selected": {
+      "fg": "selectedListItemText",
+      "bg": "warning"
+    },
+    "permission.caption": {
+      "fg": "textMuted",
+      "bg": "transparent"
+    },
+    "permission.bar": {
+      "fg": "transparent",
+      "bg": "backgroundElement"
+    },
+    "permission.body": {
+      "fg": "text",
+      "bg": "transparent"
+    },
+    "permission.text": {
+      "fg": "text",
+      "bg": "transparent"
+    },
+    "permission.text.cursor": {
+      "fg": "primary",
+      "bg": "transparent"
+    },
+    "question.panel": {
+      "fg": "transparent",
+      "bg": "backgroundPanel"
+    },
+    "question.border": {
+      "fg": "accent",
+      "bg": "transparent"
+    },
+    "question.tab": {
+      "fg": "text",
+      "bg": "backgroundPanel"
+    },
+    "question.tab.active": {
+      "fg": "selectedListItemText",
+      "bg": "accent"
+    },
+    "question.tab.hover": {
+      "fg": "text",
+      "bg": "backgroundElement"
+    },
+    "question.option": {
+      "fg": "text",
+      "bg": "backgroundPanel"
+    },
+    "question.option.hover": {
+      "fg": "secondary",
+      "bg": "backgroundElement"
+    },
+    "question.option.hover.number": {
+      "fg": "#4de64d",
+      "bg": "backgroundElement"
+    },
+    "question.option.selected": {
+      "fg": "selectedListItemText",
+      "bg": "secondary"
+    },
+    "question.option.picked": {
+      "fg": "success",
+      "bg": "transparent"
+    },
+    "question.muted": {
+      "fg": "textMuted",
+      "bg": "transparent"
+    },
+    "question.unanswered": {
+      "fg": "error",
+      "bg": "transparent"
+    },
+    "question.body": {
+      "fg": "text",
+      "bg": "transparent"
+    },
+    "question.review": {
+      "fg": "text",
+      "bg": "transparent"
+    },
+    "question.text": {
+      "fg": "text",
+      "bg": "transparent"
+    },
+    "question.text.cursor": {
+      "fg": "primary",
+      "bg": "transparent"
+    },
+    "question.hint": {
+      "fg": "text",
+      "bg": "transparent"
+    },
+    "subagent.footer.panel": {
+      "fg": "transparent",
+      "bg": "backgroundPanel"
+    },
+    "subagent.footer.border": {
+      "fg": "border",
+      "bg": "transparent"
+    },
+    "subagent.footer.text": {
+      "fg": "text",
+      "bg": "transparent"
+    },
+    "subagent.footer.strong": {
+      "fg": "text",
+      "bg": "transparent"
+    },
+    "subagent.footer.muted": {
+      "fg": "textMuted",
+      "bg": "transparent"
+    },
+    "subagent.footer.hover": {
+      "fg": "text",
+      "bg": "backgroundElement"
+    },
+    "which-key.panel": {
+      "fg": "transparent",
+      "bg": "backgroundMenu"
+    },
+    "which-key.text": {
+      "fg": "text",
+      "bg": "transparent"
+    },
+    "which-key.muted": {
+      "fg": "textMuted",
+      "bg": "transparent"
+    },
+    "which-key.key": {
+      "fg": "warning",
+      "bg": "transparent"
+    },
+    "which-key.subtle": {
+      "fg": "borderSubtle",
+      "bg": "transparent"
+    },
+    "which-key.tab": {
+      "fg": "selectedListItemText",
+      "bg": "transparent"
+    },
+    "which-key.accent": {
+      "fg": "primary",
+      "bg": "transparent"
+    },
+    "startup.panel": {
+      "fg": "transparent",
+      "bg": "backgroundPanel"
+    },
+    "startup.loading": {
+      "fg": "textMuted",
+      "bg": "transparent"
+    },
+    "logo.left": {
+      "fg": "textMuted",
+      "bg": "transparent"
+    },
+    "logo.right": {
+      "fg": "text",
+      "bg": "transparent"
+    },
+    "bg-pulse.panel": {
+      "fg": "transparent",
+      "bg": "backgroundPanel"
+    },
+    "bg-pulse.accent": {
+      "fg": "primary",
+      "bg": "transparent"
+    },
+    "bg-pulse.base": {
+      "fg": "transparent",
+      "bg": "#9e9e9e"
+    },
+    "tips.marker": {
+      "fg": "warning",
+      "bg": "transparent"
+    },
+    "run.background": {
+      "fg": "transparent",
+      "bg": "background"
+    },
+    "run.footer.text": {
+      "fg": "text",
+      "bg": "transparent"
+    },
+    "run.footer.muted": {
+      "fg": "textMuted",
+      "bg": "transparent"
+    },
+    "run.footer.highlight": {
+      "fg": "primary",
+      "bg": "transparent"
+    },
+    "run.footer.warn": {
+      "fg": "warning",
+      "bg": "transparent"
+    },
+    "run.footer.success": {
+      "fg": "success",
+      "bg": "transparent"
+    },
+    "run.footer.error": {
+      "fg": "error",
+      "bg": "transparent"
+    },
+    "run.footer.selected": {
+      "fg": "transparent",
+      "bg": "backgroundElement"
+    },
+    "run.footer.selected-text": {
+      "fg": "selectedListItemText",
+      "bg": "transparent"
+    },
+    "run.footer.pane": {
+      "fg": "transparent",
+      "bg": "backgroundMenu"
+    },
+    "run.footer.border": {
+      "fg": "border",
+      "bg": "transparent"
+    },
+    "run.entry.system": {
+      "fg": "textMuted",
+      "bg": "transparent"
+    },
+    "run.entry.user": {
+      "fg": "primary",
+      "bg": "transparent"
+    },
+    "run.entry.assistant": {
+      "fg": "text",
+      "bg": "transparent"
+    },
+    "run.entry.reasoning": {
+      "fg": "textMuted",
+      "bg": "transparent"
+    },
+    "run.entry.tool": {
+      "fg": "text",
+      "bg": "transparent"
+    },
+    "run.entry.tool.start": {
+      "fg": "textMuted",
+      "bg": "transparent"
+    },
+    "run.entry.error": {
+      "fg": "error",
+      "bg": "transparent"
+    },
+    "run.splash.left": {
+      "fg": "textMuted",
+      "bg": "transparent"
+    },
+    "run.splash.right": {
+      "fg": "text",
+      "bg": "transparent"
+    },
+    "run.block.highlight": {
+      "fg": "primary",
+      "bg": "transparent"
+    },
+    "run.block.warning": {
+      "fg": "warning",
+      "bg": "transparent"
+    },
+    "run.block.text": {
+      "fg": "text",
+      "bg": "transparent"
+    },
+    "run.block.muted": {
+      "fg": "textMuted",
+      "bg": "transparent"
+    },
+    "run.block.diff.added": {
+      "fg": "diffAdded",
+      "bg": "transparent"
+    },
+    "run.block.diff.removed": {
+      "fg": "diffRemoved",
+      "bg": "transparent"
+    },
+    "run.block.diff.added-bg": {
+      "fg": "transparent",
+      "bg": "transparent"
+    },
+    "run.block.diff.removed-bg": {
+      "fg": "transparent",
+      "bg": "transparent"
+    },
+    "run.block.diff.context-bg": {
+      "fg": "transparent",
+      "bg": "transparent"
+    },
+    "run.block.diff.highlight-added": {
+      "fg": "diffHighlightAdded",
+      "bg": "transparent"
+    },
+    "run.block.diff.highlight-removed": {
+      "fg": "diffHighlightRemoved",
+      "bg": "transparent"
+    },
+    "run.block.diff.line-number": {
+      "fg": "diffLineNumber",
+      "bg": "transparent"
+    },
+    "run.block.diff.added-line-number-bg": {
+      "fg": "transparent",
+      "bg": "diffAddedLineNumberBg"
+    },
+    "run.block.diff.removed-line-number-bg": {
+      "fg": "transparent",
+      "bg": "diffRemovedLineNumberBg"
     },
     "thinkingOpacity": 0.6
   }
