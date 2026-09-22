@@ -447,7 +447,10 @@
     },
     "message.discarded.text": {
       "fg": "#c0c0c096",
-      "bg": "transparent"
+      "bg": "transparent",
+      "attributes": [
+        "strikethrough"
+      ]
     },
     "message.discarded.marker": {
       "fg": "textMuted",
