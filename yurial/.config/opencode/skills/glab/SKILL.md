@@ -114,7 +114,31 @@ glab mr reopen <iid>        # reopen
 
 All commands accept `-R <group/project>`.
 
-## 8. API pagination
+## 8. Leaving comments — mandatory `AI generated:` prefix
+
+Every comment posted via glab — a note on an MR, a comment on an issue, or a
+reply in a discussion — must begin with the prefix `AI generated:` followed
+by a space and the comment text. The prefix marks the comment as
+machine-generated: never post a comment without it.
+
+```bash
+glab mr note <iid> -m "AI generated: <comment text>"    # note on an MR (<iid> or branch)
+glab issue note <iid> -m "AI generated: <comment text>" # comment on an issue
+# reply in an existing MR discussion — via the API (:fullpath = current repository):
+glab api -X POST "projects/:fullpath/merge_requests/<iid>/discussions/<discussion_id>/notes" \
+  --raw-field body="AI generated: <comment text>"
+```
+
+Rules:
+
+- The prefix is mandatory for every posted comment; in a multi-line comment
+  the first line still begins with `AI generated:`.
+- Repo context (section 1) applies: `glab mr note` and `glab issue note`
+  accept `-R <group/project>`; in `glab api` use the `:fullpath` placeholder
+  inside the repository, or write the project URL-encoded:
+  `projects/<group>%2F<project>/...`.
+
+## 9. API pagination
 
 `glab api` returns a single page (20 records by default). For complete lists:
 
