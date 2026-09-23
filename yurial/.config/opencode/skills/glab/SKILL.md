@@ -1,27 +1,32 @@
 ---
 name: glab
-description: Use when working with GitLab from the command line via glab (GitLab CLI): listing, viewing, creating, checking out, approving, and merging merge requests (MRs), filtering MRs by role (reviewer, assignee, author), draft/WIP MRs, and calling the GitLab REST API via `glab api`. Covers glab-specific traps: repository context, scope=all, iid vs id, pagination. Use ONLY for glab/GitLab CLI operations, not for plain git workflows or other forges.
+description: Use when working with GitLab from the command line via glab (GitLab CLI): listing, viewing, creating, checking out, approving, and merging merge requests (MRs), filtering MRs by role (reviewer, assignee, author), draft/WIP MRs, managing issues, checking CI/CD pipelines and jobs, and calling the GitLab REST API via `glab api` (fields, bodies, pagination, URL-encoded paths). Covers glab-specific traps: repository context, scope=all, iid vs id, pagination, flag collisions, HTTP 401/403/404 disambiguation, non-interactive usage. Use ONLY for glab/GitLab CLI operations, not for plain git workflows or other forges.
 ---
 
 # glab: GitLab CLI — typical workflows and traps
 
 This skill is a practical guide to glab, the GitLab CLI: repository context,
-authorization, role-based MR lists, drafts, typical operations, API pagination.
-Every identifier in the examples is a placeholder: `<group/project>`,
-`<username>`, `<iid>`.
+authorization, non-interactive usage, role-based MR lists, drafts, typical
+operations, the REST API via `glab api` (fields, bodies, URL-encoded paths,
+pagination), reading HTTP errors, issues, and CI/CD pipelines and jobs.
+Verified against glab 1.36.0; on another version re-check flags with
+`glab <command> --help` before relying on them. Every identifier in the
+examples is a placeholder: `<group/project>`, `<username>`, `<iid>`,
+`<job-id>`.
 
 ## 1. Repository context
 
 The `glab mr ...`, `glab issue ...`, `glab ci ...` commands must run inside a
 git repository: the host and the project are derived from `git remote`
 (usually `origin`). Outside a repository the command fails with
-`fatal: not a git repository` and exit code 1 — that is a context error, not
-"the project has no MRs".
+`fatal: not a git repository (or any of the parent directories): .git` and
+exit code 1 — that is a context error, not "the project has no MRs".
 
 - To work with a specific (including someone else's) project, use the `-R`
   flag: `glab mr list -R <group/project>` (format `<group>/<project>`, nested
-  groups `<group>/<subgroup>/<project>`). The `-R` flag exists on all `glab mr`,
-  `glab issue`, and `glab ci` commands.
+  groups `<group>/<subgroup>/<project>`; a full project URL or git URL also
+  works). The `-R` flag exists on all `glab mr`, `glab issue`, and `glab ci`
+  commands.
 - `glab api` and `glab auth status` work from anywhere: the host comes from the
   authentication config — inside a git repository the host of that repository
   is used, outside it the default host (overridable with the `--hostname` flag
@@ -32,9 +37,43 @@ git repository: the host and the project are derived from `git remote`
 `glab auth status` — check who you are logged in as and on which hosts; works
 from any directory. Before working with a new host, make sure it has a valid
 token (`✓ Logged in ... as <username>`); `x`/`!` lines in the output indicate
-a token problem, and with one the API calls will return 401.
+a token problem (`x No token provided`, `! Invalid token provided`), and with
+one the API calls will return 401.
 
-## 3. MR lists by role
+- Non-interactive login: `glab auth login --hostname <host> --stdin` reads the
+  token from standard input (minimum token scopes: `api`, `write_repository`).
+- Environment variables: `GITLAB_TOKEN` — token for API requests (overrides
+  stored credentials); `GITLAB_HOST` — the GitLab host for self-managed
+  instances.
+
+## 3. Non-interactive usage and machine-readable output
+
+Agents run non-interactively: an unexpected prompt hangs the whole run.
+
+- `NO_PROMPT=1` disables glab's interactive prompts.
+- Mutating commands take `-y`/`--yes` to skip the submission confirmation
+  prompt: `glab mr create --fill -y`, `glab mr merge <iid> -y`,
+  `glab issue create -t "<title>" -y`.
+- Prefer explicit flags over prompts (`glab mr create -t <title> -d
+  <description>`, `--no-editor` to avoid opening an editor).
+- `NO_COLOR` strips ANSI escape sequences from output you are going to parse.
+- In scripts use long flag names: short flags collide across subcommands —
+  `-F` is `--field` in `glab api` but `--output-format` in `glab issue list`;
+  `-f` is `--raw-field` in `glab api` but `--fill` in `glab mr create`.
+
+Machine-readable output:
+
+- `glab api` is the reliable JSON source: it prints raw JSON to stdout.
+- `glab mr list` has no JSON output format in glab 1.36.0 — when you need
+  JSON, query the API instead:
+  `glab api "projects/:fullpath/merge_requests?state=opened"`.
+- `glab issue list -F ids` (and `-F urls`) prints one iid (one web URL) per
+  line — machine-friendly without full JSON.
+- `glab api` exits 0 even on HTTP errors (401, 404): check the stderr line
+  `glab: <message> (HTTP <code>)` or the response body, never the exit code
+  (see section 12).
+
+## 4. MR lists by role
 
 Inside a repository — `glab mr list` with a role filter (`@me` is the current
 user):
@@ -45,7 +84,9 @@ glab mr list --author=@me      # where I am the author
 glab mr list --assignee=@me    # where I am the assignee
 ```
 
-The list is limited to one project (or a group with `-g <group>`).
+The list is limited to one project (or a group with `-g <group>`); by default
+one page of 30 records — use `-P <n>` (per page) and `-p <n>` (page number)
+when listing.
 
 Across all accessible projects — the global REST endpoint `merge_requests`:
 
@@ -58,22 +99,25 @@ The output is a JSON array; parse it with jq or python. Useful fields of each
 MR: `iid`, `title`, `state`, `references.full` (full project path + iid),
 `web_url`, `work_in_progress`, `author`.
 
-## 4. The scope=all trap (critical)
+## 5. The scope=all trap (critical)
 
 Without `scope`, the global `merge_requests` endpoint returns only MRs created
 by the user themself (the default scope is `created_by_me`). A "where am I a
-reviewer" query without `&scope=all` silently returns an empty list — and it is
-easy to draw the false conclusion "there are no MRs".
+reviewer" query without `&scope=all` silently returns a wrong list — only the
+caller's own MRs among those matching the filter, often an empty one — and it
+is easy to draw the false conclusion "there are no MRs".
 
 Rules:
 
 - Any global MR search by `reviewer_username` / `author_username` /
   `assignee_username` — only with `&scope=all`.
+- The global `issues` endpoint has the same documented default scope — add
+  `&scope=all` there too.
 - On an empty result, before reporting "no MRs", check in order: whether
   `scope=all` is present; whether `state` is right (`opened` excludes
   `merged`/`closed`); whether the right project/group is being searched.
 
-## 5. iid vs the global number
+## 6. iid vs the global number
 
 - `iid` is the MR number within a single project; it is the number used in the
   URL and passed to `glab mr <subcommand> <iid>` commands. Only `id` is
@@ -81,12 +125,12 @@ Rules:
 - The same `iid` in different projects means different MRs.
 - `404 Not Found` from `glab mr view <N>` more often means "wrong project"
   than "the MR does not exist": the host and project were taken from the
-  current repository.
+  current repository (see also section 12).
 - Therefore, when viewing an MR by number, always either work from that
   project's repository or specify the project explicitly: `glab mr view <iid>
   -R <group/project>`.
 
-## 6. Drafts
+## 7. Drafts
 
 - A draft MR has a `Draft:` / `WIP:` title prefix; in the API — the field
   `work_in_progress: true`.
@@ -96,7 +140,7 @@ Rules:
   `work_in_progress` field of the JSON response or the `Draft:` prefix in the
   title): a draft is usually not ready for review/merge.
 
-## 7. Typical MR operations
+## 8. Typical MR operations
 
 An MR can be addressed by number (`<iid>`) or by its source branch name;
 without an argument, the MR of the current branch is used.
@@ -114,7 +158,7 @@ glab mr reopen <iid>        # reopen
 
 All commands accept `-R <group/project>`.
 
-## 8. Leaving comments — mandatory `AI generated:` prefix
+## 9. Leaving comments — mandatory `AI generated:` prefix
 
 Every comment posted via glab — a note on an MR, a comment on an issue, or a
 reply in a discussion — must begin with the prefix `AI generated:` followed
@@ -131,14 +175,41 @@ glab api -X POST "projects/:fullpath/merge_requests/<iid>/discussions/<discussio
 
 Rules:
 
-- The prefix is mandatory for every posted comment; in a multi-line comment
-  the first line still begins with `AI generated:`.
+- The prefix is mandatory for every posted comment, without exceptions for
+  short one-line comments; in a multi-line comment the first line still
+  begins with `AI generated:`.
 - Repo context (section 1) applies: `glab mr note` and `glab issue note`
   accept `-R <group/project>`; in `glab api` use the `:fullpath` placeholder
-  inside the repository, or write the project URL-encoded:
-  `projects/<group>%2F<project>/...`.
+  inside the repository, or the URL-encoded project path (section 10).
 
-## 9. API pagination
+## 10. glab api: fields, bodies, and URL-encoded paths
+
+Passing parameters. The default method is GET; adding any field switches it
+to POST; `-X`/`--method` overrides explicitly:
+
+- `-f`/`--raw-field key=value` — a string parameter, no type conversion:
+  `--raw-field body="<text>"`.
+- `-F`/`--field key=value` — a typed parameter: the literals `true`/`false`/
+  `null` and integers are converted to JSON types; a value starting with `@`
+  is read from that file, `-` from standard input — the standard way to pass
+  multiline text: `--field description=@<file>`.
+- A raw request body (e.g. a ready JSON document) is passed with
+  `--input <file>` (`-` = stdin); in this mode the `-F`/`-f` flags are
+  serialized into URL query parameters instead of the body.
+- `-H`/`--header "Key: Value"` adds HTTP headers.
+
+Project paths in API URLs:
+
+- Inside a repository use the `:fullpath` placeholder — it is replaced with
+  the current project: `glab api projects/:fullpath/merge_requests`.
+- Outside a repository (or for another project) the path must be URL-encoded:
+  `projects/<group>%2F<project>/merge_requests` — a raw `/` splits the URL
+  into segments and the route does not resolve.
+- The two 404 shapes tell them apart: an unencoded path answers a generic
+  `{"error":"404 Not Found"}` even when the project exists; the encoded path
+  for a missing project answers `{"message":"404 Project Not Found"}`.
+
+## 11. API pagination
 
 `glab api` returns a single page (20 records by default). For complete lists:
 
@@ -148,3 +219,50 @@ Rules:
 
 A missing "tail" of a large list is a typical symptom of forgotten pagination:
 check whether the result was cut off by the page limit.
+
+## 12. HTTP errors: 401 vs 403 vs 404
+
+`glab api` prints the response body to stdout and `glab: <message> (HTTP
+<code>)` to stderr — and exits 0 (section 3): read the code, not the exit
+status. Disambiguation:
+
+- `401 Unauthorized` — token problem for that host: missing, invalid, or
+  expired. Check `glab auth status` (section 2) and re-login.
+- `403 Forbidden` — the token is valid, but the account lacks permission for
+  this action (e.g. admin-only endpoints, merging without access).
+- `404 Not Found` — most often a wrong project: the host/project were taken
+  from the repository context or the path was not URL-encoded (section 10);
+  only then "the resource does not exist" (see also iid vs id, section 6).
+
+## 13. Issues
+
+Brief working set. The repository-context and iid rules (sections 1 and 6)
+apply to issues exactly as to MRs.
+
+```bash
+glab issue list --assignee=@me      # my assigned issues; likewise --author=<username>
+glab issue list -F ids              # machine-friendly: one iid per line (also: -F urls)
+glab issue view <iid>               # issue card (--comments); a full issue URL also works
+glab issue create -t "<title>" -d "<description>" -y   # non-interactive create
+glab issue note <iid> -m "AI generated: <comment text>" # comment — prefix mandatory (section 9)
+glab issue close <iid>              # also: glab issue reopen <iid>
+```
+
+The global `issues` endpoint needs `&scope=all` for role-filtered queries,
+same as `merge_requests` (section 5).
+
+## 14. CI/CD pipelines and jobs
+
+All commands take the repository context (`-R`, section 1). `glab ci` has the
+aliases `glab pipe` / `glab pipeline`.
+
+```bash
+glab ci status                  # pipeline of the current branch (-b <branch>; -c compact; -l live)
+glab ci list --status=failed    # pipelines; statuses: running|pending|success|failed|canceled|...
+glab ci trace <job-id>          # live log of a job — by numeric job id or job name
+glab ci retry <job-id>          # retry a job — by numeric job id or job name
+```
+
+Note: `trace` and `retry` address jobs, not pipelines; without an argument
+they prompt to select a job interactively — pass the job id or name
+explicitly in non-interactive runs (section 3).
