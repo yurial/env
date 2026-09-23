@@ -1,14 +1,15 @@
 ---
 name: glab
-description: Use when working with GitLab from the command line via glab (GitLab CLI): listing, viewing, creating, checking out, approving, and merging merge requests (MRs), filtering MRs by role (reviewer, assignee, author), draft/WIP MRs, managing issues, checking CI/CD pipelines and jobs, and calling the GitLab REST API via `glab api` (fields, bodies, pagination, URL-encoded paths). Covers glab-specific traps: repository context, scope=all, iid vs id, pagination, flag collisions, HTTP 401/403/404 disambiguation, non-interactive usage. Use ONLY for glab/GitLab CLI operations, not for plain git workflows or other forges.
+description: Use when working with GitLab from the command line via glab (GitLab CLI): listing, viewing, creating, checking out, approving, and merging merge requests (MRs), writing MR descriptions (Russian description, English commit message), reading and posting MR comments (line-anchored comments), filtering MRs by role (reviewer, assignee, author), draft/WIP MRs, managing issues, checking CI/CD pipelines and jobs, and calling the GitLab REST API via `glab api` (fields, bodies, pagination, URL-encoded paths). Covers glab-specific traps: repository context, scope=all, iid vs id, pagination, flag collisions, HTTP 401/403/404 disambiguation, non-interactive usage. Use ONLY for glab/GitLab CLI operations, not for plain git workflows or other forges.
 ---
 
 # glab: GitLab CLI — typical workflows and traps
 
 This skill is a practical guide to glab, the GitLab CLI: repository context,
 authorization, non-interactive usage, role-based MR lists, drafts, typical
-operations, the REST API via `glab api` (fields, bodies, URL-encoded paths,
-pagination), reading HTTP errors, issues, and CI/CD pipelines and jobs.
+operations, MR descriptions and review comments, the REST API via
+`glab api` (fields, bodies, URL-encoded paths, pagination), reading HTTP
+errors, issues, and CI/CD pipelines and jobs.
 Verified against glab 1.36.0; on another version re-check flags with
 `glab <command> --help` before relying on them. Every identifier in the
 examples is a placeholder: `<group/project>`, `<username>`, `<iid>`,
@@ -71,7 +72,7 @@ Machine-readable output:
   line — machine-friendly without full JSON.
 - `glab api` exits 0 even on HTTP errors (401, 404): check the stderr line
   `glab: <message> (HTTP <code>)` or the response body, never the exit code
-  (see section 12).
+  (see section 13).
 
 ## 4. MR lists by role
 
@@ -125,7 +126,7 @@ Rules:
 - The same `iid` in different projects means different MRs.
 - `404 Not Found` from `glab mr view <N>` more often means "wrong project"
   than "the MR does not exist": the host and project were taken from the
-  current repository (see also section 12).
+  current repository (see also section 13).
 - Therefore, when viewing an MR by number, always either work from that
   project's repository or specify the project explicitly: `glab mr view <iid>
   -R <group/project>`.
@@ -151,12 +152,20 @@ glab mr diff <iid>          # MR diff
 glab mr checkout <iid>      # check out the MR branch locally
 glab mr create --fill       # create an MR; --fill — title/description from commits
 glab mr approve <iid>       # approve
-glab mr merge <iid>         # merge (useful: -y, --squash, -d)
+glab mr merge <iid>         # merge (useful: -y, --squash, -d/--remove-source-branch)
 glab mr close <iid>         # close
 glab mr reopen <iid>        # reopen
 ```
 
 All commands accept `-R <group/project>`.
+
+When creating an MR, set the "delete source branch on merge" flag:
+`glab mr create --remove-source-branch` — the branch deletion is then carried
+by the MR and happens however the MR is later merged. Mind the short-flag
+collision (section 3): in `mr create` `-d` is `--description`, so only the
+long form sets the branch flag; in `mr merge` `-d` is
+`--remove-source-branch` — the fallback for an MR created without the flag:
+`glab mr merge <iid> -d`.
 
 ## 9. Leaving comments — mandatory `AI generated:` prefix
 
@@ -180,9 +189,60 @@ Rules:
   begins with `AI generated:`.
 - Repo context (section 1) applies: `glab mr note` and `glab issue note`
   accept `-R <group/project>`; in `glab api` use the `:fullpath` placeholder
-  inside the repository, or the URL-encoded project path (section 10).
+  inside the repository, or the URL-encoded project path (section 11).
 
-## 10. glab api: fields, bodies, and URL-encoded paths
+## 10. MR descriptions and review comments
+
+Languages of an MR: the description is written in Russian and describes both
+the problem and the way this problem is solved; the MR commit message is
+written in English and semantically mirrors the Russian description.
+
+- Pass the description explicitly:
+  `glab mr create -t "<title>" -d "<description in Russian>"`; correct it
+  later with `glab mr update <iid> -d "<description>"`.
+- Do not rely on `--fill` (section 8): it fills the title/description from
+  commit info — English text, the wrong language for the description.
+- The English commit message is set at merge time: `glab mr merge <iid> -m
+  "<message>"` (with `-s/--squash` — `--squash-message "<message>"`).
+
+Reading review comments: always resolve the line numbers a comment refers
+to and read the code at those lines before replying or acting on it.
+
+```bash
+glab mr view <iid> --comments  # quick view: comments and activities
+glab api "projects/:fullpath/merge_requests/<iid>/discussions?per_page=100"
+# machine-readable form (pagination — section 12); a diff-anchored note
+# carries "position": new_line/new_path (new side) or old_line/old_path
+# (old side), position_type "text", line_range when it spans a block of
+# lines; a note without "position" is a top-level MR note
+```
+
+Read the anchored lines in `glab mr diff <iid>` or in the checked-out MR
+branch (section 8) — never discuss code you have not read at the anchored
+lines.
+
+Writing review comments about specific code: leave a line-level comment
+anchored to that line/block, not a top-level note. `glab mr note` posts
+only top-level notes (no line anchoring in 1.36.0); a line-anchored
+comment is created via the discussions API — `body` plus a `position` built
+from the MR's `diff_refs` (`base_sha`, `head_sha`, `start_sha`; the
+single-MR endpoint provides them, the list endpoint returns
+`diff_refs: null`):
+
+```bash
+glab api -X POST "projects/:fullpath/merge_requests/<iid>/discussions" --input <file>
+# <file> — JSON body passed verbatim (--input, section 11):
+# {"body":"AI generated: <comment text>",
+#  "position":{"base_sha":"<sha>","start_sha":"<sha>","head_sha":"<sha>",
+#              "position_type":"text","new_path":"<path>","new_line":<n>}}
+```
+
+- For a comment on the old side of the diff use `old_path` + `old_line`
+  instead of `new_path` + `new_line`.
+- The mandatory `AI generated:` prefix (section 9) applies to line-anchored
+  comments as to every other.
+
+## 11. glab api: fields, bodies, and URL-encoded paths
 
 Passing parameters. The default method is GET; adding any field switches it
 to POST; `-X`/`--method` overrides explicitly:
@@ -209,7 +269,7 @@ Project paths in API URLs:
   `{"error":"404 Not Found"}` even when the project exists; the encoded path
   for a missing project answers `{"message":"404 Project Not Found"}`.
 
-## 11. API pagination
+## 12. API pagination
 
 `glab api` returns a single page (20 records by default). For complete lists:
 
@@ -220,7 +280,7 @@ Project paths in API URLs:
 A missing "tail" of a large list is a typical symptom of forgotten pagination:
 check whether the result was cut off by the page limit.
 
-## 12. HTTP errors: 401 vs 403 vs 404
+## 13. HTTP errors: 401 vs 403 vs 404
 
 `glab api` prints the response body to stdout and `glab: <message> (HTTP
 <code>)` to stderr — and exits 0 (section 3): read the code, not the exit
@@ -231,10 +291,10 @@ status. Disambiguation:
 - `403 Forbidden` — the token is valid, but the account lacks permission for
   this action (e.g. admin-only endpoints, merging without access).
 - `404 Not Found` — most often a wrong project: the host/project were taken
-  from the repository context or the path was not URL-encoded (section 10);
+  from the repository context or the path was not URL-encoded (section 11);
   only then "the resource does not exist" (see also iid vs id, section 6).
 
-## 13. Issues
+## 14. Issues
 
 Brief working set. The repository-context and iid rules (sections 1 and 6)
 apply to issues exactly as to MRs.
@@ -251,7 +311,7 @@ glab issue close <iid>              # also: glab issue reopen <iid>
 The global `issues` endpoint needs `&scope=all` for role-filtered queries,
 same as `merge_requests` (section 5).
 
-## 14. CI/CD pipelines and jobs
+## 15. CI/CD pipelines and jobs
 
 All commands take the repository context (`-R`, section 1). `glab ci` has the
 aliases `glab pipe` / `glab pipeline`.

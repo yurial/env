@@ -7,11 +7,11 @@ Reference: glab
 
 ## Overview
 
-The `glab` skill governs how an agent works with GitLab from the command line via glab, the GitLab CLI. The skill is instructions to the agent: practical rules for repository context, authorization, non-interactive usage, role-based MR lists, drafts, typical MR operations, machine-generated comments, the REST API via `glab api` (fields, request bodies, URL-encoded paths, pagination), HTTP error disambiguation, issues, and CI/CD pipelines and jobs. The skill carries no scripts or mechanical checks: glab itself is the tool being operated. Every command, flag, and behavioral claim in the skill must be verified against the help output of the installed glab version — `glab help`, `glab <command> --help` — or against live behavior on an authenticated host; the skill states the version it was verified against (GLAB-S-17, GLAB-S-18). Traps — conditions that fail silently or mislead (scope=all, iid vs id, flag collisions, HTTP error shapes, exit code 0 on HTTP errors) — are highlighted as critical in the skill (GLAB-S-22).
+The `glab` skill governs how an agent works with GitLab from the command line via glab, the GitLab CLI. The skill is instructions to the agent: practical rules for repository context, authorization, non-interactive usage, role-based MR lists, drafts, typical MR operations, machine-generated comments, MR descriptions and review comments (the description/commit-message language pair, reading line-anchored discussions, posting line-level comments), the REST API via `glab api` (fields, request bodies, URL-encoded paths, pagination), HTTP error disambiguation, issues, and CI/CD pipelines and jobs. The skill carries no scripts or mechanical checks: glab itself is the tool being operated. Every command, flag, and behavioral claim in the skill must be verified against the help output of the installed glab version — `glab help`, `glab <command> --help` — or against live behavior on an authenticated host; the skill states the version it was verified against (GLAB-S-17, GLAB-S-18). Traps — conditions that fail silently or mislead (scope=all, iid vs id, flag collisions, HTTP error shapes, exit code 0 on HTTP errors) — are highlighted as critical in the skill (GLAB-S-22).
 
 ## Activation triggers
 
-The skill activates when working with GitLab from the command line via glab: listing, viewing, creating, checking out, approving, and merging merge requests; filtering MRs by role (reviewer, assignee, author); draft/WIP MRs; managing issues; checking CI/CD pipelines and jobs; calling the GitLab REST API via `glab api`; non-interactive glab usage and interpreting glab errors. The canonical trigger text is the frontmatter `description` (Interface); the activation scope grows together with Topic coverage (GLAB-S-23). The skill does not apply to plain git workflows, other forges, or GitLab web UI operations (Scope, Out).
+The skill activates when working with GitLab from the command line via glab: listing, viewing, creating, checking out, approving, and merging merge requests; writing MR descriptions and reading and posting MR review comments; filtering MRs by role (reviewer, assignee, author); draft/WIP MRs; managing issues; checking CI/CD pipelines and jobs; calling the GitLab REST API via `glab api`; non-interactive glab usage and interpreting glab errors. The canonical trigger text is the frontmatter `description` (Interface); the activation scope grows together with Topic coverage (GLAB-S-23). The skill does not apply to plain git workflows, other forges, or GitLab web UI operations (Scope, Out).
 
 ## Scope
 
@@ -24,7 +24,9 @@ In:
 - iid vs global id (GLAB-S-05);
 - drafts/WIP MRs (GLAB-S-06);
 - typical MR operations (GLAB-S-07);
+- deleting the source branch on merge — the flag is set at MR creation, with the merge-time equivalent as a fallback (GLAB-S-34);
 - machine-generated comments with the mandatory `AI generated:` prefix (GLAB-S-08);
+- MR descriptions and review comments: description/commit-message languages, reading discussions with line context, line-anchored comments (GLAB-S-31, GLAB-S-32, GLAB-S-33);
 - `glab api` request construction: fields, bodies, URL-encoded paths (GLAB-S-10, GLAB-S-11);
 - API pagination (GLAB-S-09);
 - HTTP error disambiguation 401/403/404 (GLAB-S-14);
@@ -51,6 +53,7 @@ Out (non-goals):
 | URL-encoded project path | the `<group>%2F<project>` form of a project path in REST URLs; a raw `/` splits URL segments and breaks route resolution (GLAB-S-11). |
 | placeholder | an angle-bracket identifier (`<group/project>`, `<username>`, `<iid>`, ...) standing for a real value; real identifiers must not appear in the skill (GLAB-S-19). |
 | machine-readable output | output intended for programmatic parsing: raw JSON from `glab api`, the `ids`/`urls` formats of `glab issue list` (GLAB-S-13). |
+| line-anchored comment | a discussion note attached to specific diff lines via a `position` object (`position_type` `"text"`; `new_line`/`new_path` for the new side, `old_line`/`old_path` for the old side; `line_range` spans a block of lines); contrasted with a top-level MR note, which has no `position` (GLAB-S-32, GLAB-S-33). |
 | trap | a condition that fails silently or returns misleading data (scope=all, iid vs id, flag collisions, HTTP 404 shapes, exit code 0 on HTTP errors); traps are highlighted in the skill (GLAB-S-22). |
 
 ## Interface (skill components)
@@ -60,7 +63,7 @@ Out (non-goals):
 ```yaml
 ---
 name: glab
-description: Use when working with GitLab from the command line via glab (GitLab CLI): listing, viewing, creating, checking out, approving, and merging merge requests (MRs), filtering MRs by role (reviewer, assignee, author), draft/WIP MRs, managing issues, checking CI/CD pipelines and jobs, and calling the GitLab REST API via `glab api` (fields, bodies, pagination, URL-encoded paths). Covers glab-specific traps: repository context, scope=all, iid vs id, pagination, flag collisions, HTTP 401/403/404 disambiguation, non-interactive usage. Use ONLY for glab/GitLab CLI operations, not for plain git workflows or other forges.
+description: Use when working with GitLab from the command line via glab (GitLab CLI): listing, viewing, creating, checking out, approving, and merging merge requests (MRs), writing MR descriptions (Russian description, English commit message), reading and posting MR comments (line-anchored comments), filtering MRs by role (reviewer, assignee, author), draft/WIP MRs, managing issues, checking CI/CD pipelines and jobs, and calling the GitLab REST API via `glab api` (fields, bodies, pagination, URL-encoded paths). Covers glab-specific traps: repository context, scope=all, iid vs id, pagination, flag collisions, HTTP 401/403/404 disambiguation, non-interactive usage. Use ONLY for glab/GitLab CLI operations, not for plain git workflows or other forges.
 ---
 ```
 
@@ -82,22 +85,24 @@ Norms of form:
 ## 5. The scope=all trap (critical)                        — GLAB-S-04
 ## 6. iid vs the global number                             — GLAB-S-05
 ## 7. Drafts                                               — GLAB-S-06
-## 8. Typical MR operations                                — GLAB-S-07
+## 8. Typical MR operations                                — GLAB-S-07, GLAB-S-34
 ## 9. Leaving comments — mandatory `AI generated:` prefix  — GLAB-S-08
-## 10. glab api: fields, bodies, and URL-encoded paths     — GLAB-S-10, GLAB-S-11
-## 11. API pagination                                      — GLAB-S-09
-## 12. HTTP errors: 401 vs 403 vs 404                      — GLAB-S-14
-## 13. Issues                                              — GLAB-S-15
-## 14. CI/CD pipelines and jobs                            — GLAB-S-16
+## 10. MR descriptions and review comments                 — GLAB-S-31, GLAB-S-32, GLAB-S-33
+## 11. glab api: fields, bodies, and URL-encoded paths     — GLAB-S-10, GLAB-S-11
+## 12. API pagination                                      — GLAB-S-09
+## 13. HTTP errors: 401 vs 403 vs 404                      — GLAB-S-14
+## 14. Issues                                              — GLAB-S-15
+## 15. CI/CD pipelines and jobs                            — GLAB-S-16
 ```
 
-The section order is canonical: context and authorization come before workflows; traps follow their subject matter; API mechanics precede error interpretation; issues and CI close the document.
+The section order is canonical: context and authorization come before workflows; traps follow their subject matter; the MR description/review-comment workflow follows the comment-prefix rule; API mechanics precede error interpretation; issues and CI close the document.
 
 ### Named components
 
 - The `AI generated:` prefix rule — the mandatory marker on every comment posted via glab (GLAB-S-08; invariant GLAB-S-26).
 - The scope=all rule — the mandatory `&scope=all` on global role-filtered MR/issue queries plus the empty-result checklist (GLAB-S-04; invariant GLAB-S-27).
 - The iid≠id rule — per-project numbers, context/`-R` discipline for numeric references, the 404-wrong-project heuristic (GLAB-S-05; invariant GLAB-S-28).
+- The MR language and line-anchoring rules — the MR description in Russian (problem + solution) with the MR commit message in English semantically mirroring it; reading comments at their anchored lines; line-level comments preferred over top-level notes (GLAB-S-31..GLAB-S-33).
 - The accuracy gate — no flag or command example reaches the skill without verification against the installed glab (GLAB-S-17..GLAB-S-20; invariants GLAB-S-29, GLAB-S-30).
 
 ## Requirements
@@ -120,12 +125,16 @@ The section order is canonical: context and authorization come before workflows;
 - GLAB-S-14. HTTP error disambiguation. The skill documents: 401 — token missing, invalid, or expired for that host → check `glab auth status`, re-login; 403 — the token is valid but the account lacks permission for the action (GitLab REST semantics); 404 — most often a wrong project (repository context, missing `-R`, unencoded path per GLAB-S-11), only then a nonexistent resource — consistent with the iid≠id rule (GLAB-S-05); and that `glab api` exits 0 on all of these (GLAB-S-13).
 - GLAB-S-15. Issues. The skill documents the verified subset: `glab issue list` — filters `--assignee=@me`, `--author=<username>`, `-A`, `-g <group>`, labels, search; machine-friendly formats `-F ids`/`-F urls`; `glab issue view <iid>` (also accepts a full issue URL); non-interactive creation `glab issue create -t "<title>" -d "<description>" -y`; `glab issue note` with the mandatory prefix (GLAB-S-08); `glab issue close`/`glab issue reopen`. iid semantics and the repository-context rules apply to issues exactly as to MRs (GLAB-S-01, GLAB-S-05); the global `issues` endpoint requires `scope=all` (GLAB-S-04).
 - GLAB-S-16. CI/CD pipelines and jobs. The skill documents the verified subset: `glab ci status` — pipeline of the current branch, flags `-b <branch>`, `-c` (compact), `-l` (live); `glab ci list` — `--status=<status>` filter (running|pending|success|failed|canceled|skipped|...); `glab ci trace <job-id>|<job-name>` — live job log, flags `-b`, `-p <pipeline-id>`; `glab ci retry <job-id>|<job-name>` — retry operates at the job level, not the pipeline level; the aliases `glab pipe`/`glab pipeline`; that without an argument `trace`/`retry` prompt interactively to select a job; repository context and `-R` apply (GLAB-S-01).
+- GLAB-S-31. MR description and commit-message languages. The skill documents: the MR description is written in Russian and describes both the problem being solved and the way this problem is solved; the MR commit message is written in English and semantically mirrors the Russian description. The description is passed explicitly — `glab mr create -t "<title>" -d "<description>"` — and corrected later with `glab mr update <iid> -d "<description>"`; the `--fill` caveat: `--fill` takes the title/description from commit info (English commit messages), which does not satisfy the required language split, so it is not used to produce the description; the English commit message is set at merge time — `glab mr merge <iid> -m "<message>"` (with `-s/--squash` — `--squash-message "<message>"`).
+- GLAB-S-32. Reading MR comments with line context. The skill documents: when reading MR discussions/comments, always resolve the line numbers a comment is anchored to and read the code at those lines (`glab mr diff <iid>` or the checked-out MR branch) before replying or acting on the comment; the quick view is `glab mr view <iid> --comments`, the machine-readable form is `glab api "projects/:fullpath/merge_requests/<iid>/discussions"` (pagination per GLAB-S-09); a diff-anchored note carries a `position` object — `position_type` `"text"`, `new_line`/`new_path` for the new side, `old_line`/`old_path` for the old side, `line_range` when the note spans a block of lines — while a note without `position` is a top-level MR note.
+- GLAB-S-33. Line-level comments preferred. The skill documents: a comment about specific code is posted as a note anchored to that line/block — a line-anchored comment (Definitions) — not as a top-level note; `glab mr note` posts only top-level notes (in glab 1.36.0 it has no line anchoring), so a line-anchored comment is created via the REST API: `POST projects/:id/merge_requests/<iid>/discussions` with a `body` and a `position` — `base_sha`/`start_sha`/`head_sha` taken from the single-MR endpoint's `diff_refs` (the list endpoint returns `diff_refs: null`), `position_type` `"text"`, `new_path`+`new_line` (or `old_path`+`old_line`) — passed as a JSON body via `--input` (GLAB-S-10); the mandatory `AI generated:` prefix (GLAB-S-08, GLAB-S-26) applies to these comments as to every other.
+- GLAB-S-34. Delete source branch on merge. The skill documents: an MR is created with the «delete source branch on merge» setting — `glab mr create --remove-source-branch`; the flag is set at creation so that the branch deletion is carried by the MR and happens however the MR is later merged; short-flag collision (GLAB-S-12): in `mr create` `-d` is `--description`, so only the long form sets the branch flag, while in `mr merge` `-d` is `--remove-source-branch`; the merge-time equivalent — `glab mr merge <iid> -d`/`--remove-source-branch` — is documented as the fallback for an MR created without the flag; both flags verified against glab 1.36.0 help.
 
 ### Accuracy
 
 - GLAB-S-17. Every command, flag, and example in SKILL.md must be verified against the help output of the installed glab (`glab help`, `glab <command> --help`) or against live behavior on an authenticated host before being added or kept.
 - GLAB-S-18. The skill states the glab version it was verified against (currently 1.36.0) and instructs re-checking flags with `glab <command> --help` when running another version.
-- GLAB-S-19. Identifiers in examples are placeholders only — `<group/project>`, `<username>`, `<iid>`, `<discussion_id>`, `<job-id>`, `<job-name>`, `<branch>`, `<host>`, `<title>`, `<comment text>`; no real hosts, users, projects, or numeric IDs appear in the skill.
+- GLAB-S-19. Identifiers in examples are placeholders only — `<group/project>`, `<username>`, `<iid>`, `<discussion_id>`, `<job-id>`, `<job-name>`, `<branch>`, `<host>`, `<title>`, `<description>`, `<message>`, `<comment text>`, `<file>`, `<sha>`, `<path>`, `<n>`; no real hosts, users, projects, or numeric IDs appear in the skill.
 - GLAB-S-20. Behavioral claims not verifiable via help or a live check are excluded, or explicitly marked as version/instance-dependent; help output and live checks always take precedence over recollection.
 
 ### Structure
@@ -152,6 +161,7 @@ The section order is canonical: context and authorization come before workflows;
 - GLAB-S-04 subtree (live-verified pattern): `glab api "merge_requests?reviewer_username=<username>&per_page=100"` returns only MRs authored by the caller; the same query with `&scope=all` returns MRs from all authors — the difference is the silent default scope `created_by_me`.
 - GLAB-S-10/GLAB-S-11 subtree: a discussion reply with the mandatory prefix and encoded path — `glab api -X POST "projects/<group>%2F<project>/merge_requests/<iid>/discussions/<discussion_id>/notes" --raw-field body="AI generated: <comment text>"`; inside the repository the same call uses `projects/:fullpath/...`.
 - GLAB-S-13 subtree: `glab api "<endpoint>"` for a missing project prints `{"message":"404 Project Not Found"}` to stdout and `glab: 404 Project Not Found (HTTP 404)` to stderr while exiting 0 — parse stderr or the body, never the exit code.
+- GLAB-S-32/GLAB-S-33 subtree (live-verified response shape): a diff-anchored note in `glab api "projects/:fullpath/merge_requests/<iid>/discussions?per_page=100"` carries `position` with `position_type: "text"`, `new_path`/`old_path`, `new_line` (or `old_line`), and a `line_range` block for multi-line anchors; the SHAs for creating such a note come from the single-MR endpoint's `diff_refs` (`base_sha`, `head_sha`, `start_sha`) — the list endpoint returns `diff_refs: null`.
 
 ## Usage constraints
 
