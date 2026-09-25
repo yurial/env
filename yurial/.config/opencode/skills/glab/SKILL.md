@@ -1,16 +1,21 @@
 ---
 name: glab
-description: Use when working with GitLab from the command line via glab (GitLab CLI): listing, viewing, creating, checking out, approving, and merging merge requests (MRs), writing MR descriptions (Russian description, English commit message), reading and posting MR comments (line-anchored comments), filtering MRs by role (reviewer, assignee, author), draft/WIP MRs, managing issues, checking CI/CD pipelines and jobs, and calling the GitLab REST API via `glab api` (fields, bodies, pagination, URL-encoded paths). Covers glab-specific traps: repository context, scope=all, iid vs id, pagination, flag collisions, HTTP 401/403/404 disambiguation, non-interactive usage. Use ONLY for glab/GitLab CLI operations, not for plain git workflows or other forges.
+description: Use when working with GitLab from the command line via glab (GitLab CLI): listing, viewing, creating, checking out, approving, and merging merge requests (MRs), writing MR descriptions (Russian description, English commit message), reading and posting MR comments (line-anchored comments), batch posting of review comments, line-anchor validation against diff hunks, discussion replies via GraphQL fallback, thread resolution state, filtering MRs by role (reviewer, assignee, author), draft/WIP MRs, managing issues, checking CI/CD pipelines and jobs, and calling the GitLab REST API via `glab api` (fields, bodies, pagination, URL-encoded paths). Covers glab-specific traps: repository context, scope=all, iid vs id, pagination, flag collisions, HTTP 401/403/404 disambiguation, non-interactive usage. Use ONLY for glab/GitLab CLI operations, not for plain git workflows or other forges.
 ---
 
 # glab: GitLab CLI — typical workflows and traps
 
 This skill is a practical guide to glab, the GitLab CLI: repository context,
 authorization, non-interactive usage, role-based MR lists, drafts, typical
-operations, MR descriptions and review comments, the REST API via
-`glab api` (fields, bodies, URL-encoded paths, pagination), reading HTTP
-errors, issues, and CI/CD pipelines and jobs.
-Verified against glab 1.36.0; on another version re-check flags with
+operations, MR descriptions and review comments (single and batch posting of
+line-anchored comments, anchor validation against diff hunks), replying in
+discussions (GraphQL fallback) and thread resolution state, the REST API via
+`glab api` (fields, bodies, URL-encoded paths, pagination) and GraphQL via
+`glab api graphql`, reading HTTP errors, issues, and CI/CD pipelines and
+jobs.
+Verified against glab 1.36.0; behavior marked instance-dependent was
+observed live on a self-managed GitLab 18.7.7-ee and is not guaranteed on
+other instances. On another glab version re-check flags with
 `glab <command> --help` before relying on them. Every identifier in the
 examples is a placeholder: `<group/project>`, `<username>`, `<iid>`,
 `<job-id>`.
@@ -70,9 +75,9 @@ Machine-readable output:
   `glab api "projects/:fullpath/merge_requests?state=opened"`.
 - `glab issue list -F ids` (and `-F urls`) prints one iid (one web URL) per
   line — machine-friendly without full JSON.
-- `glab api` exits 0 even on HTTP errors (401, 404): check the stderr line
-  `glab: <message> (HTTP <code>)` or the response body, never the exit code
-  (see section 13).
+- `glab api` exits 0 even on HTTP errors (400, 401, 404): check the stderr
+  line `glab: <message> (HTTP <code>)` or the response body, never the exit
+  code (see section 13).
 
 ## 4. MR lists by role
 
@@ -242,6 +247,45 @@ glab api -X POST "projects/:fullpath/merge_requests/<iid>/discussions" --input <
 - The mandatory `AI generated:` prefix (section 9) applies to line-anchored
   comments as to every other.
 
+Batch posting of tens of line-anchored comments in one run follows a fixed
+protocol:
+
+- Validate every anchor against the diff before posting. A position is
+  accepted only on lines inside diff hunks (added or changed lines);
+  `new_line` on a context (unchanged) line fails with HTTP 400 and a body
+  naming an invalid line_code. grep finding the marker in the file is not
+  enough — the line must be part of a hunk. Collect the new-side line
+  ranges from the hunk headers
+  (`@@ -<old> +<start>,<count> @@`) of the diffs endpoint
+  `glab api "projects/:fullpath/merge_requests/<iid>/diffs?per_page=100"`
+  (paginated like any list — section 12) and check each anchor against
+  them.
+- Take `diff_refs` from the single-MR endpoint immediately before posting
+  the batch and never cache them across sessions: they change when the
+  author pushes to the source branch or the target branch moves, and a long
+  batch can have its shas rotated mid-run. Notes created against a
+  superseded diff version are marked outdated by GitLab — that is expected,
+  not an error.
+- Post the first comment alone (a canary) and verify the response schema —
+  discussion id, note id, position — before posting the rest.
+- Detect failures by the response body (fields `message`/`error`) and the
+  stderr line, never by the exit code: `glab api` exits 0 on HTTP 400 for
+  POST as well (section 3). On a 400 naming position/line_code, retry the
+  same body without `position` — the note lands as a top-level note; keep
+  the reference by writing `<path>:<line>` into the text.
+- Save `discussion_id`/`note_id` from every POST response: the final
+  verification is then the set of saved ids, not a full re-fetch of all
+  discussions.
+- Instance-dependent (observed once on GitLab 18.7.7-ee): a raw-body POST
+  (`--input`) returned rc=0 with `{"message":"500 Internal Server Error"}`
+  in the body while the note had in fact been created — after mass writes
+  verify creation by the response id or a targeted GET, trusting neither
+  the exit code nor the message in the body alone.
+- Instance-dependent (observed once, cause unconfirmed): posting tens of
+  comments in rapid succession under one account transiently affected that
+  account's web UI. Work in batches, verify via the API, and warn the user
+  before large insertions.
+
 ## 11. glab api: fields, bodies, and URL-encoded paths
 
 Passing parameters. The default method is GET; adding any field switches it
@@ -268,6 +312,11 @@ Project paths in API URLs:
 - The two 404 shapes tell them apart: an unencoded path answers a generic
   `{"error":"404 Not Found"}` even when the project exists; the encoded path
   for a missing project answers `{"message":"404 Project Not Found"}`.
+- `glab api` has no `-R/--repo` flag (verified against 1.36.0 help): the
+  project is always part of the URL — `:fullpath` inside the repository or
+  the URL-encoded path outside it — and the host is selected with
+  `--hostname <host>`. The `-R` flag exists on `glab mr`, `glab issue`,
+  `glab ci` commands, not on `glab api`.
 
 ## 12. API pagination
 
@@ -352,6 +401,10 @@ glab api "projects/:fullpath/merge_requests/<iid>/discussions?per_page=100"
   (or `old_path`/`old_line`) and `position_type` (section 10).
 - Filter to actual comments: skip notes with `system: true`; a note with a
   `position` is line-anchored, without — a top-level note.
+- The listing itself is paginated (section 12): `per_page` up to 100, and
+  an MR with more than 100 discussions requires walking pages — a comment
+  set silently cut at a round boundary is forgotten pagination, not the
+  whole review.
 - Reply into the same thread via
   `POST .../discussions/<discussion_id>/notes` (section 9) — this keeps the
   answer attached to the reviewer's comment instead of opening a new thread.
@@ -361,7 +414,38 @@ list non-system notes with their anchored `new_path:new_line`, read the code
 at those lines (section 10), then reply per discussion with the mandatory
 prefix.
 
-## 17. Issues
+## 17. Replying in discussions and thread state (trap)
+
+The documented REST reply path is
+`POST .../discussions/<discussion_id>/notes` (section 9). On some instances
+(observed on GitLab 18.7.7-ee — instance-dependent) it answers 404, while
+the `in_reply_to_discussion_id` parameter of `POST .../notes` is silently
+ignored: the reply lands as a separate orphan discussion. The working path
+on such an instance is the GraphQL mutation `createNote` with a
+`discussionId` of the form `gid://gitlab/Discussion/<discussion_id>`, sent
+via `glab api graphql` (the `graphql` endpoint is documented in
+`glab api --help`; fields other than `query`/`operationName` are passed as
+GraphQL variables, so the object `input` goes via a raw `--input` body):
+
+```bash
+glab api graphql --input <file>
+# <file> — the GraphQL request as raw JSON (--input, section 11):
+# {"query":"mutation($input: CreateNoteInput!){createNote(input:$input){note{id}errors}}",
+#  "variables":{"input":{"discussionId":"gid://gitlab/Discussion/<discussion_id>",
+#                        "body":"AI generated: <comment text>"}}}
+```
+
+The mandatory `AI generated:` prefix (section 9) applies to GraphQL replies
+as to every other comment.
+
+Thread state: in the discussions listing a discussion-level `resolved` field
+may be absent (observed on 18.7.7-ee — instance-dependent); a thread counts
+as resolved exactly when every non-system note in it has `resolved: true`.
+The MR-level merge-readiness signal for open threads is
+`blocking_discussions_resolved` of the single-MR endpoint (section 10), not
+a discussion-level flag.
+
+## 18. Issues
 
 
 Brief working set. The repository-context and iid rules (sections 1 and 6)
@@ -379,7 +463,7 @@ glab issue close <iid>              # also: glab issue reopen <iid>
 The global `issues` endpoint needs `&scope=all` for role-filtered queries,
 same as `merge_requests` (section 5).
 
-## 18. CI/CD pipelines and jobs
+## 19. CI/CD pipelines and jobs
 
 All commands take the repository context (`-R`, section 1). `glab ci` has the
 aliases `glab pipe` / `glab pipeline`.
