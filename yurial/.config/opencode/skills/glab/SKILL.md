@@ -1,6 +1,6 @@
 ---
 name: glab
-description: Use when working with GitLab from the command line via glab (GitLab CLI): listing, viewing, creating, checking out, approving, and merging merge requests (MRs), writing MR descriptions (Russian description, English commit message), reading and posting MR comments (line-anchored comments), batch posting of review comments, line-anchor validation against diff hunks, discussion replies via GraphQL fallback, thread resolution state, filtering MRs by role (reviewer, assignee, author), draft/WIP MRs, managing issues, checking CI/CD pipelines and jobs, and calling the GitLab REST API via `glab api` (fields, bodies, pagination, URL-encoded paths). Covers glab-specific traps: repository context, scope=all, iid vs id, pagination, flag collisions, HTTP 401/403/404 disambiguation, non-interactive usage. Use ONLY for glab/GitLab CLI operations, not for plain git workflows or other forges.
+description: Use when working with GitLab from the command line via glab (GitLab CLI): listing, viewing, creating, checking out, approving, and merging merge requests (MRs), writing MR descriptions (Russian description, English commit message), reading and posting MR comments (line-anchored comments), batch posting of review comments, line-anchor validation against diff hunks, review comments via draft review (draft notes, publish all at once), discussion replies via GraphQL fallback, thread resolution state, filtering MRs by role (reviewer, assignee, author), draft/WIP MRs, managing issues, checking CI/CD pipelines and jobs, and calling the GitLab REST API via `glab api` (fields, bodies, pagination, URL-encoded paths). Covers glab-specific traps: repository context, scope=all, iid vs id, pagination, flag collisions, HTTP 401/403/404 disambiguation, non-interactive usage. Use ONLY for glab/GitLab CLI operations, not for plain git workflows or other forges.
 ---
 
 # glab: GitLab CLI — typical workflows and traps
@@ -8,11 +8,12 @@ description: Use when working with GitLab from the command line via glab (GitLab
 This skill is a practical guide to glab, the GitLab CLI: repository context,
 authorization, non-interactive usage, role-based MR lists, drafts, typical
 operations, MR descriptions and review comments (single and batch posting of
-line-anchored comments, anchor validation against diff hunks), replying in
-discussions (GraphQL fallback) and thread resolution state, the REST API via
-`glab api` (fields, bodies, URL-encoded paths, pagination) and GraphQL via
-`glab api graphql`, reading HTTP errors, issues, and CI/CD pipelines and
-jobs.
+line-anchored comments, anchor validation against diff hunks), the draft
+review flow (draft notes created first, then published all at once with a
+single call), replying in discussions (GraphQL fallback) and thread
+resolution state, the REST API via `glab api` (fields, bodies, URL-encoded
+paths, pagination) and GraphQL via `glab api graphql`, reading HTTP errors,
+issues, and CI/CD pipelines and jobs.
 Verified against glab 1.36.0; behavior marked instance-dependent was
 observed live on a self-managed GitLab 18.7.7-ee and is not guaranteed on
 other instances. On another glab version re-check flags with
@@ -77,7 +78,7 @@ Machine-readable output:
   line — machine-friendly without full JSON.
 - `glab api` exits 0 even on HTTP errors (400, 401, 404): check the stderr
   line `glab: <message> (HTTP <code>)` or the response body, never the exit
-  code (see section 13).
+  code (see section 14).
 
 ## 4. MR lists by role
 
@@ -131,7 +132,7 @@ Rules:
 - The same `iid` in different projects means different MRs.
 - `404 Not Found` from `glab mr view <N>` more often means "wrong project"
   than "the MR does not exist": the host and project were taken from the
-  current repository (see also section 13).
+  current repository (see also section 14).
 - Therefore, when viewing an MR by number, always either work from that
   project's repository or specify the project explicitly: `glab mr view <iid>
   -R <group/project>`.
@@ -194,7 +195,7 @@ Rules:
   begins with `AI generated:`.
 - Repo context (section 1) applies: `glab mr note` and `glab issue note`
   accept `-R <group/project>`; in `glab api` use the `:fullpath` placeholder
-  inside the repository, or the URL-encoded project path (section 11).
+  inside the repository, or the URL-encoded project path (section 12).
 
 ## 10. MR descriptions and review comments
 
@@ -216,7 +217,7 @@ to and read the code at those lines before replying or acting on it.
 ```bash
 glab mr view <iid> --comments  # quick view: comments and activities
 glab api "projects/:fullpath/merge_requests/<iid>/discussions?per_page=100"
-# machine-readable form (pagination — section 12); a diff-anchored note
+# machine-readable form (pagination — section 13); a diff-anchored note
 # carries "position": new_line/new_path (new side) or old_line/old_path
 # (old side), position_type "text", line_range when it spans a block of
 # lines; a note without "position" is a top-level MR note
@@ -236,7 +237,7 @@ single-MR endpoint provides them, the list endpoint returns
 
 ```bash
 glab api -X POST "projects/:fullpath/merge_requests/<iid>/discussions" --input <file>
-# <file> — JSON body passed verbatim (--input, section 11):
+# <file> — JSON body passed verbatim (--input, section 12):
 # {"body":"AI generated: <comment text>",
 #  "position":{"base_sha":"<sha>","start_sha":"<sha>","head_sha":"<sha>",
 #              "position_type":"text","new_path":"<path>","new_line":<n>}}
@@ -258,7 +259,7 @@ protocol:
   ranges from the hunk headers
   (`@@ -<old> +<start>,<count> @@`) of the diffs endpoint
   `glab api "projects/:fullpath/merge_requests/<iid>/diffs?per_page=100"`
-  (paginated like any list — section 12) and check each anchor against
+  (paginated like any list — section 13) and check each anchor against
   them.
 - Take `diff_refs` from the single-MR endpoint immediately before posting
   the batch and never cache them across sessions: they change when the
@@ -286,7 +287,100 @@ protocol:
   account's web UI. Work in batches, verify via the API, and warn the user
   before large insertions.
 
-## 11. glab api: fields, bodies, and URL-encoded paths
+## 11. Review flow: draft notes, publish all at once (preferred)
+
+For a review with multiple line-anchored comments, do not POST every
+comment straight into discussions: build the review as draft notes and
+publish them all with one call. A draft note is a pending, unpublished
+comment on an MR — before publishing it is visible only to its author
+(per GitLab docs) — so creating, inspecting, and deleting drafts is
+private and recoverable; publishing is the single public step. glab
+1.36.0 has no high-level draft-note commands (verified against help):
+the flow rides entirely on `glab api`.
+
+```bash
+# availability probe: the draft list answers 200 with an array
+# (empty when no drafts) if the API is on; 404 — see the fallback below
+glab api "projects/:fullpath/merge_requests/<iid>/draft_notes"
+
+# draft body: TOP-LEVEL "note" STRING + optional top-level "position"
+# (diff_refs from the single-MR endpoint, section 10)
+cat > <file> <<'EOF'
+{"note":"AI generated: <comment text>",
+ "position":{"base_sha":"<sha>","start_sha":"<sha>","head_sha":"<sha>",
+             "position_type":"text","new_path":"<path>","new_line":<n>}}
+EOF
+
+# create the drafts, one POST per comment of the review
+glab api -X POST -H "Content-Type: application/json" \
+  "projects/:fullpath/merge_requests/<iid>/draft_notes" --input <file>
+# success body: {"id":<draft_note_id>,"note":"...","line_code":"...",
+#                "position":{...},"resolve_discussion":false,
+#                "discussion_id":null,"commit_id":null,"author_id":<n>}
+
+# verify the whole set before publishing (paginated — section 13)
+glab api "projects/:fullpath/merge_requests/<iid>/draft_notes?per_page=100"
+
+# publish ALL pending drafts of the current user in ONE call
+glab api -X POST "projects/:fullpath/merge_requests/<iid>/draft_notes/bulk_publish"
+
+# a wrong draft: delete and recreate (creation is private, failures are recoverable)
+glab api -X DELETE "projects/:fullpath/merge_requests/<iid>/draft_notes/<draft_note_id>"
+# empty body on success; the next GET of the draft answers 404
+
+# publish a single draft (per GitLab docs, not live-verified)
+glab api -X PUT "projects/:fullpath/merge_requests/<iid>/draft_notes/<draft_note_id>/publish"
+```
+
+Contract traps (live-verified on GitLab 18.7.7-ee):
+
+- `note` is a top-level string. A nested object
+  `{"note":{"body":...,"position":...}}` answers HTTP 400
+  `{"error":"note is invalid"}`; `position` is a top-level sibling of
+  `note` (as are `resolve_discussion` and `in_reply_to_discussion_id`
+  per GitLab docs).
+- A raw-body POST (`--input`) without a Content-Type header answers HTTP
+  415 `{"error":"The provided content-type '' is not supported."}` —
+  always pass `-H "Content-Type: application/json"` (request construction,
+  section 12).
+- The server does NOT validate a draft's anchor: a position with
+  `new_line` beyond the end of the file was accepted at creation, and
+  `old_path` is optional in practice. Validate every anchor against hunk
+  ranges client-side BEFORE creating the drafts (section 10) — an invalid
+  anchor surfaces only at publish time, after the batch has gone public.
+- Detect failures by the response body, never the exit code (section 14):
+  `glab api` exits 0 on HTTP 400/415 here as everywhere.
+- `bulk_publish` publishes all pending drafts of the current user in one
+  call; the drafts become real notes/discussions, and the draft list
+  empties (per GitLab docs). Optional body fields per GitLab docs, not
+  live-verified: `note` — a summary note added to the MR, `internal`,
+  `reviewer_state` (`requested_changes`|`reviewed`). On 18.7.7-ee both
+  publish routes exist (verified without publishing: `bulk_publish` on an
+  empty draft set is a no-op answering an empty body; the single-publish
+  route answers 400 `{"error":"draft_note_id is invalid"}` on a
+  non-integer id); the publish actions themselves are per GitLab docs,
+  not live-verified — version/instance-dependent.
+
+Order of operations for a review: fetch `diff_refs` from the single-MR
+endpoint → validate every anchor against hunk ranges (section 10) →
+create N drafts (failures by response body) → verify the draft list via
+GET → one `bulk_publish` → optionally verify the published notes via the
+discussions endpoint (section 17).
+
+- The mandatory `AI generated:` prefix (section 9) applies to every draft
+  note as to every other comment.
+- `diff_refs` freshness (section 10) applies to draft positions the same
+  way: if the shas rotate between draft creation and publishing, the
+  published notes are marked outdated — expected, not an error.
+- Fallback: if the availability probe answers 404, the instance does not
+  offer the draft-notes API (instance-dependent) — post the review by the
+  direct batch protocol of section 10. A direct `POST .../discussions`
+  also remains the right tool for a single comment outside a review;
+  replies into existing threads go per section 18 (draft notes accept
+  `in_reply_to_discussion_id` for replies per GitLab docs, not
+  live-verified).
+
+## 12. glab api: fields, bodies, and URL-encoded paths
 
 Passing parameters. The default method is GET; adding any field switches it
 to POST; `-X`/`--method` overrides explicitly:
@@ -318,7 +412,7 @@ Project paths in API URLs:
   `--hostname <host>`. The `-R` flag exists on `glab mr`, `glab issue`,
   `glab ci` commands, not on `glab api`.
 
-## 12. API pagination
+## 13. API pagination
 
 `glab api` returns a single page (20 records by default). For complete lists:
 
@@ -329,7 +423,7 @@ Project paths in API URLs:
 A missing "tail" of a large list is a typical symptom of forgotten pagination:
 check whether the result was cut off by the page limit.
 
-## 13. HTTP errors: 401 vs 403 vs 404
+## 14. HTTP errors: 401 vs 403 vs 404
 
 `glab api` prints the response body to stdout and `glab: <message> (HTTP
 <code>)` to stderr — and exits 0 (section 3): read the code, not the exit
@@ -340,10 +434,10 @@ status. Disambiguation:
 - `403 Forbidden` — the token is valid, but the account lacks permission for
   this action (e.g. admin-only endpoints, merging without access).
 - `404 Not Found` — most often a wrong project: the host/project were taken
-  from the repository context or the path was not URL-encoded (section 11);
+  from the repository context or the path was not URL-encoded (section 12);
   only then "the resource does not exist" (see also iid vs id, section 6).
 
-## 14. Multi-host auth: `auth status` can mislead (trap)
+## 15. Multi-host auth: `auth status` can mislead (trap)
 
 On a machine with several configured hosts, `glab auth status` prints a block
 per host. Two pitfalls observed in practice:
@@ -360,7 +454,7 @@ Recovery: re-login `glab auth login --hostname <host> --stdin`, or supply a
 fresh token via `GITLAB_TOKEN` (section 2). `glab api` still returns 401 with
 exit code 0 (section 3/13).
 
-## 15. Git-over-HTTP(S) auth: tokens do not always work for push (trap)
+## 16. Git-over-HTTP(S) auth: tokens do not always work for push (trap)
 
 `glab` covers the API. `git push`/`git fetch` over HTTPS authenticate
 separately, and on self-managed instances an API token — even a working one —
@@ -385,7 +479,7 @@ Reliable options, in order:
 Never leave a token embedded in a remote URL (it lands in `.git/config` in
 plain text).
 
-## 16. Reading MR review comments: use the discussions endpoint (trap)
+## 17. Reading MR review comments: use the discussions endpoint (trap)
 
 `GET .../merge_requests/<iid>/notes` returns a flat list of all notes
 (system + user) with no file/line context and mixed ordering — easy to miss a
@@ -401,7 +495,7 @@ glab api "projects/:fullpath/merge_requests/<iid>/discussions?per_page=100"
   (or `old_path`/`old_line`) and `position_type` (section 10).
 - Filter to actual comments: skip notes with `system: true`; a note with a
   `position` is line-anchored, without — a top-level note.
-- The listing itself is paginated (section 12): `per_page` up to 100, and
+- The listing itself is paginated (section 13): `per_page` up to 100, and
   an MR with more than 100 discussions requires walking pages — a comment
   set silently cut at a round boundary is forgotten pagination, not the
   whole review.
@@ -414,7 +508,7 @@ list non-system notes with their anchored `new_path:new_line`, read the code
 at those lines (section 10), then reply per discussion with the mandatory
 prefix.
 
-## 17. Replying in discussions and thread state (trap)
+## 18. Replying in discussions and thread state (trap)
 
 The documented REST reply path is
 `POST .../discussions/<discussion_id>/notes` (section 9). On some instances
@@ -429,7 +523,7 @@ GraphQL variables, so the object `input` goes via a raw `--input` body):
 
 ```bash
 glab api graphql --input <file>
-# <file> — the GraphQL request as raw JSON (--input, section 11):
+# <file> — the GraphQL request as raw JSON (--input, section 12):
 # {"query":"mutation($input: CreateNoteInput!){createNote(input:$input){note{id}errors}}",
 #  "variables":{"input":{"discussionId":"gid://gitlab/Discussion/<discussion_id>",
 #                        "body":"AI generated: <comment text>"}}}
@@ -445,7 +539,7 @@ The MR-level merge-readiness signal for open threads is
 `blocking_discussions_resolved` of the single-MR endpoint (section 10), not
 a discussion-level flag.
 
-## 18. Issues
+## 19. Issues
 
 
 Brief working set. The repository-context and iid rules (sections 1 and 6)
@@ -463,7 +557,7 @@ glab issue close <iid>              # also: glab issue reopen <iid>
 The global `issues` endpoint needs `&scope=all` for role-filtered queries,
 same as `merge_requests` (section 5).
 
-## 19. CI/CD pipelines and jobs
+## 20. CI/CD pipelines and jobs
 
 All commands take the repository context (`-R`, section 1). `glab ci` has the
 aliases `glab pipe` / `glab pipeline`.
