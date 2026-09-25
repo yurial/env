@@ -294,7 +294,75 @@ status. Disambiguation:
   from the repository context or the path was not URL-encoded (section 11);
   only then "the resource does not exist" (see also iid vs id, section 6).
 
-## 14. Issues
+## 14. Multi-host auth: `auth status` can mislead (trap)
+
+On a machine with several configured hosts, `glab auth status` prints a block
+per host. Two pitfalls observed in practice:
+
+- A `✓` on one host does not validate another: a per-host block may show
+  `Token: ****` (a token is stored) together with `! Invalid token provided`
+  — the stored token is stale/expired. An API call against that host then
+  returns 401 even though `auth status` "shows a token".
+- `glab auth status` without `--hostname` may check a different host than the
+  one your API calls use. Always pass `--hostname <host>` when diagnosing a
+  specific host: `glab auth status --hostname <host>`.
+
+Recovery: re-login `glab auth login --hostname <host> --stdin`, or supply a
+fresh token via `GITLAB_TOKEN` (section 2). `glab api` still returns 401 with
+exit code 0 (section 3/13).
+
+## 15. Git-over-HTTP(S) auth: tokens do not always work for push (trap)
+
+`glab` covers the API. `git push`/`git fetch` over HTTPS authenticate
+separately, and on self-managed instances an API token — even a working one —
+may be rejected for git-over-HTTP (`remote: HTTP Basic: Access denied`) when
+its scope or the instance policy disallows git HTTP access. Symptoms:
+
+- `glab api ...` works (200), `git push` over HTTPS fails with
+  `HTTP Basic: Access denied`;
+- `git push` over SSH fails with `Permission denied (publickey)` when no SSH
+  key is loaded.
+
+Reliable options, in order:
+
+1. Prefer SSH remotes with a loaded agent key
+   (`ssh -T git@<host>` prints `Welcome to GitLab, @<username>!` on success).
+2. If only HTTPS is available, use the token as the password with the
+   `oauth2` username only after verifying it is accepted for git HTTP on this
+   instance: `git push https://oauth2:<token>@<host>/<group>/<project>.git`.
+3. After switching a remote URL back and forth, restore it:
+   `git remote set-url origin git@<host>:<group>/<project>.git`.
+
+Never leave a token embedded in a remote URL (it lands in `.git/config` in
+plain text).
+
+## 16. Reading MR review comments: use the discussions endpoint (trap)
+
+`GET .../merge_requests/<iid>/notes` returns a flat list of all notes
+(system + user) with no file/line context and mixed ordering — easy to miss a
+line-anchored comment or mistake it for a top-level note. The right endpoint
+for review comments is **discussions**:
+
+```bash
+glab api "projects/:fullpath/merge_requests/<iid>/discussions?per_page=100"
+```
+
+- Each discussion is a thread: its `notes` carry the comment text, author,
+  and — for diff-anchored notes — `position` with `new_path`/`new_line`
+  (or `old_path`/`old_line`) and `position_type` (section 10).
+- Filter to actual comments: skip notes with `system: true`; a note with a
+  `position` is line-anchored, without — a top-level note.
+- Reply into the same thread via
+  `POST .../discussions/<discussion_id>/notes` (section 9) — this keeps the
+  answer attached to the reviewer's comment instead of opening a new thread.
+
+Workflow for "check the review comments on MR <iid>": fetch discussions,
+list non-system notes with their anchored `new_path:new_line`, read the code
+at those lines (section 10), then reply per discussion with the mandatory
+prefix.
+
+## 17. Issues
+
 
 Brief working set. The repository-context and iid rules (sections 1 and 6)
 apply to issues exactly as to MRs.
@@ -311,7 +379,7 @@ glab issue close <iid>              # also: glab issue reopen <iid>
 The global `issues` endpoint needs `&scope=all` for role-filtered queries,
 same as `merge_requests` (section 5).
 
-## 15. CI/CD pipelines and jobs
+## 18. CI/CD pipelines and jobs
 
 All commands take the repository context (`-R`, section 1). `glab ci` has the
 aliases `glab pipe` / `glab pipeline`.
