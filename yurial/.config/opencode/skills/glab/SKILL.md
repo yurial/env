@@ -1,6 +1,6 @@
 ---
 name: glab
-description: Use when working with GitLab from the command line via glab (GitLab CLI): listing, viewing, creating, checking out, approving, and merging merge requests (MRs), writing MR descriptions (Russian description, English commit message), reading and posting MR comments (line-anchored comments), batch posting of review comments, line-anchor validation against diff hunks, review comments via draft review (draft notes, publish all at once), discussion replies via GraphQL fallback, thread resolution state, filtering MRs by role (reviewer, assignee, author), draft/WIP MRs, managing issues, checking CI/CD pipelines and jobs, and calling the GitLab REST API via `glab api` (fields, bodies, pagination, URL-encoded paths). Covers glab-specific traps: repository context, scope=all, iid vs id, pagination, flag collisions, HTTP 401/403/404 disambiguation, non-interactive usage. Use ONLY for glab/GitLab CLI operations, not for plain git workflows or other forges.
+description: Use when working with GitLab from the command line via glab (GitLab CLI): listing, viewing, creating, checking out, approving, and merging merge requests (MRs), writing MR descriptions (Russian description, English commit message), reading and posting MR comments (line-anchored comments), batch posting of review comments, line-anchor validation against diff hunks, review comments via draft review (draft notes, publish all at once), discussion replies via GraphQL fallback, thread resolution state, processing incoming review comments as the MR author (individual comment workflow, resolve discipline), filtering MRs by role (reviewer, assignee, author), draft/WIP MRs, managing issues, checking CI/CD pipelines and jobs, and calling the GitLab REST API via `glab api` (fields, bodies, pagination, URL-encoded paths). Covers glab-specific traps: repository context, scope=all, iid vs id, pagination, flag collisions, HTTP 401/403/404 disambiguation, non-interactive usage. Use ONLY for glab/GitLab CLI operations, not for plain git workflows or other forges.
 ---
 
 # glab: GitLab CLI — typical workflows and traps
@@ -11,7 +11,9 @@ operations, MR descriptions and review comments (single and batch posting of
 line-anchored comments, anchor validation against diff hunks), the draft
 review flow (draft notes created first, then published all at once with a
 single call), replying in discussions (GraphQL fallback) and thread
-resolution state, the REST API via `glab api` (fields, bodies, URL-encoded
+resolution state, processing incoming review comments as the author
+(one comment at a time, resolve discipline), the REST API via
+`glab api` (fields, bodies, URL-encoded
 paths, pagination) and GraphQL via `glab api graphql`, reading HTTP errors,
 issues, and CI/CD pipelines and jobs.
 Verified against glab 1.36.0; behavior marked instance-dependent was
@@ -376,7 +378,7 @@ discussions endpoint (section 17).
   offer the draft-notes API (instance-dependent) — post the review by the
   direct batch protocol of section 10. A direct `POST .../discussions`
   also remains the right tool for a single comment outside a review;
-  replies into existing threads go per section 18 (draft notes accept
+  replies into existing threads go per section 19 (draft notes accept
   `in_reply_to_discussion_id` for replies per GitLab docs, not
   live-verified).
 
@@ -508,7 +510,49 @@ list non-system notes with their anchored `new_path:new_line`, read the code
 at those lines (section 10), then reply per discussion with the mandatory
 prefix.
 
-## 18. Replying in discussions and thread state (trap)
+## 18. Processing review comments as the author (workflow)
+
+When you are the MR author working through incoming review comments —
+often over several rounds against the same MR — follow this workflow;
+each rule below exists because skipping it caused a real failure.
+
+- Fetch ALL discussions (section 17) each round. Never filter "new"
+  comments by a remembered time threshold alone: an approximate
+  `created_at` cutoff silently skips a note created shortly after the
+  main batch. If you use a `created_at` threshold at all, take it as
+  the maximum id and `created_at` of every note you have already
+  processed — recorded from fetched data, not from memory — and
+  re-fetch the full list anyway (paginated — section 13). A thread
+  counts as handled only when it already contains your own reply.
+- Process comments ONE BY ONE, keyed by note id: read the anchored
+  lines (section 10) and the full comment text before deciding
+  anything. Two comments about the same topic are two work items
+  unless they state the same requirement — never merge them; when in
+  doubt, treat them as separate, and ask the comment author or the
+  user rather than guess.
+- For each comment decide: a code/spec change, or a reasoned reply. A
+  "no change needed" reply must cite verified facts from the code or
+  documentation as `<path>:<line>` references. If your check proves
+  your earlier interpretation of the comment wrong — fix the code, do
+  not argue.
+- Resolve a discussion ONLY after the fix is pushed or the reasoned
+  reply is posted in the thread. A comment phrased as a question is
+  not resolved without the author's confirmation or an explicit user
+  decision. Never batch-resolve discussions — a loop of
+  `PUT ...?resolved=true` over discussion ids without reading each
+  text is forbidden (the route follows the GitLab docs; the
+  batch-resolve failure mode was observed live):
+
+```bash
+# resolve ONE thread you have read and answered (not in a loop):
+glab api -X PUT "projects/:fullpath/merge_requests/<iid>/discussions/<discussion_id>?resolved=true"
+```
+
+- After replying, re-verify the remaining unresolved set individually,
+  per discussion (thread-state rules — section 19), never by counting
+  discussions or replies.
+
+## 19. Replying in discussions and thread state (trap)
 
 The documented REST reply path is
 `POST .../discussions/<discussion_id>/notes` (section 9). On some instances
@@ -539,7 +583,7 @@ The MR-level merge-readiness signal for open threads is
 `blocking_discussions_resolved` of the single-MR endpoint (section 10), not
 a discussion-level flag.
 
-## 19. Issues
+## 20. Issues
 
 
 Brief working set. The repository-context and iid rules (sections 1 and 6)
@@ -557,7 +601,7 @@ glab issue close <iid>              # also: glab issue reopen <iid>
 The global `issues` endpoint needs `&scope=all` for role-filtered queries,
 same as `merge_requests` (section 5).
 
-## 20. CI/CD pipelines and jobs
+## 21. CI/CD pipelines and jobs
 
 All commands take the repository context (`-R`, section 1). `glab ci` has the
 aliases `glab pipe` / `glab pipeline`.
