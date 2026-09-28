@@ -387,6 +387,223 @@ run_lint "$fx/specs/index.md"
 check_case "index: valid Reference with digits and hyphens (yt-core-bus2) — clean" 0 \
     "!Reference must be a lowercase"
 
+# --- Examples E<->R mirroring ------------------------------------------------
+
+new_fixture spec-examples-valid
+cat > "$fx/ex.md" <<'EOF'
+# Ex Specification
+
+Status: draft
+Spec source of truth for: ex
+
+## Requirements
+- R1. A read of an expired key returns NOT_FOUND.
+- R2. Key expiry:
+- R2.1. A key expires after TTL seconds.
+
+## Examples
+- E1. `get("k")` on a key expired one second ago returns NOT_FOUND.
+- E2. R2 subtree: a write at t1 restarts the expiry clock.
+EOF
+run_lint "$fx/ex.md"
+check_case "spec: E entries mirroring existing R-IDs — clean" 0 \
+    "!mirrors no requirement"
+
+new_fixture spec-examples-dangling
+cat > "$fx/exd.md" <<'EOF'
+# Exd Specification
+
+Status: draft
+Spec source of truth for: exd
+
+## Requirements
+- R1. A read of an expired key returns NOT_FOUND.
+
+## Examples
+- E3. `get("k")` on a key expired one second ago returns NOT_FOUND.
+EOF
+run_lint "$fx/exd.md"
+check_case "spec: E entry mirroring no R-ID — dangling explanation error" 2 \
+    "Examples entry E3 mirrors no requirement R3"
+
+# --- Implementation I-entries -------------------------------------------------
+
+new_fixture spec-impl-valid
+cat > "$fx/impl.md" <<'EOF'
+# Impl Specification
+
+Status: draft
+Spec source of truth for: impl
+
+## Requirements
+- R1. A read of an expired key returns NOT_FOUND.
+
+## Implementation
+- I1. The expiry wheel buckets timers by whole seconds.
+- I2. Timer wheel:
+- I2.1. A timer slot holds a list of pending entries.
+EOF
+run_lint "$fx/impl.md"
+check_case "spec: valid Implementation section (leaf and group I-IDs) — clean" 0
+
+new_fixture spec-impl-dup
+cat > "$fx/impldup.md" <<'EOF'
+# Impldup Specification
+
+Status: draft
+Spec source of truth for: impldup
+
+## Implementation
+- I1. The expiry wheel buckets timers by whole seconds.
+- I1. The wheel is rebuilt on resize.
+EOF
+run_lint "$fx/impldup.md"
+check_case "spec: duplicate I-ID — error" 2 \
+    "duplicate implementation ID I1"
+
+new_fixture spec-impl-syntax
+cat > "$fx/implsyn.md" <<'EOF'
+# Implsyn Specification
+
+Status: draft
+Spec source of truth for: implsyn
+
+## Implementation
+- I1 The line lacks the period and space after the ID.
+EOF
+run_lint "$fx/implsyn.md"
+check_case "spec: I entry with broken ID syntax — format error" 2 \
+    "implementation ID must be followed by a period and a space"
+
+new_fixture spec-impl-group-period
+cat > "$fx/implgp.md" <<'EOF'
+# Implgp Specification
+
+Status: draft
+Spec source of truth for: implgp
+
+## Implementation
+- I1. The entry ends with a period yet carries a child.
+- I1.1. A timer slot holds a list of pending entries.
+EOF
+run_lint "$fx/implgp.md"
+check_case "spec: I leaf line carrying children — group must end with a colon" 2 \
+    "leaf ID I1 has children - a group line ends with a colon"
+
+new_fixture spec-impl-group-empty
+cat > "$fx/implge.md" <<'EOF'
+# Implge Specification
+
+Status: draft
+Spec source of truth for: implge
+
+## Implementation
+- I1. Timer wheel:
+EOF
+run_lint "$fx/implge.md"
+check_case "spec: I group ID with no children — error" 2 \
+    "group ID I1 has no children"
+
+new_fixture spec-impl-ancestor-missing
+cat > "$fx/implanc.md" <<'EOF'
+# Implanc Specification
+
+Status: draft
+Spec source of truth for: implanc
+
+## Implementation
+- I2.1. A timer slot holds a list of pending entries.
+EOF
+run_lint "$fx/implanc.md"
+check_case "spec: I child with missing ancestor — error" 2 \
+    "ancestor ID I2 of I2.1 is missing"
+
+new_fixture spec-impl-literal
+cat > "$fx/impllit.md" <<'EOF'
+# Impllit Specification
+
+Status: draft
+Spec source of truth for: impllit
+
+## Implementation
+- I1. The expiry wheel holds 3 buckets.
+EOF
+run_lint "$fx/impllit.md"
+check_case "spec: bare numeric literal in Implementation — literal error (only Configuration and Examples are exempt)" 2 \
+    "Implementation section contains a bare numeric literal (3)"
+
+new_fixture spec-impl-indented
+cat > "$fx/implind.md" <<'EOF'
+# Implind Specification
+
+Status: draft
+Spec source of truth for: implind
+
+## Implementation
+- I2. Timer wheel:
+  - I2.1. A timer slot holds a list of pending entries.
+EOF
+run_lint "$fx/implind.md"
+check_case "spec: indented I child entry — flat-list error, no group/leaf pile-on" 2 \
+    "prefixed entries must be a flat list - indented child entry \"I2.1\" found" \
+    "!group ID I2 has no children"
+
+# --- Tests entries citing I-IDs ------------------------------------------------
+
+new_fixture spec-tests-cite-impl
+cat > "$fx/ti.md" <<'EOF'
+# Ti Specification
+
+Status: draft
+Spec source of truth for: ti
+
+## Requirements
+- R1. A read of an expired key returns NOT_FOUND.
+
+## Implementation
+- I1. The expiry wheel buckets timers by whole seconds.
+
+## Tests
+- T1. wheel-buckets checks bucket granularity (I1)
+- T2. get-expired-key returns NOT_FOUND (R1)
+EOF
+run_lint "$fx/ti.md"
+check_case "spec: Tests entries citing R-ID and I-ID — clean" 0
+
+new_fixture spec-tests-cite-impl-missing
+cat > "$fx/tim.md" <<'EOF'
+# Tim Specification
+
+Status: draft
+Spec source of truth for: tim
+
+## Requirements
+- R1. A read of an expired key returns NOT_FOUND.
+
+## Tests
+- T1. wheel-buckets checks bucket granularity (I2)
+EOF
+run_lint "$fx/tim.md"
+check_case "spec: Tests entry citing nonexistent I-ID — error" 2 \
+    "test T1 cites nonexistent implementation ID I2"
+
+new_fixture spec-tests-cite-none
+cat > "$fx/tn.md" <<'EOF'
+# Tn Specification
+
+Status: draft
+Spec source of truth for: tn
+
+## Requirements
+- R1. A read of an expired key returns NOT_FOUND.
+
+## Tests
+- T1. some unchecked behavior
+EOF
+run_lint "$fx/tn.md"
+check_case "spec: leaf Tests entry citing neither R-ID nor I-ID — error" 2 \
+    "Tests entry T1 cites no requirement R-ID or implementation I-ID"
+
 # -----------------------------------------------------------------------------
 
 printf '%d run, %d failed\n' "$total" "$failed"

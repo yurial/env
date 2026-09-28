@@ -14,16 +14,22 @@
 #   - an ID with children is a group, an ID without children is a leaf;
 #   - requirement IDs are unique; every child's ancestor IDs exist and
 #     are groups;
-#   - every Examples entry A<x> mirrors an existing requirement R<x>;
+#   - implementation lines match "- I<digits>(.<digits>)*[.] Text" — the
+#     ID immediately followed by a period and a space; implementation
+#     IDs are unique; the group/leaf, ancestor, and trailing-punctuation
+#     checks for I mirror the R family (a leaf ends with '.', a group
+#     with ':');
+#   - every Examples entry E<x> mirrors an existing requirement R<x>;
 #   - verification lines match "- V<digits>(.<digits>)*[.] Text" and
 #     verification IDs are unique;
 #   - tests lines match "- T<digits>(.<digits>)*[.] Text", test IDs are
-#     unique, every leaf Tests entry cites a requirement R-ID, and
-#     every R-ID cited by a Tests entry (ID-range endpoints included,
-#     e.g. R3-R7) names an existing requirement;
+#     unique, every leaf Tests entry cites a requirement R-ID or an
+#     implementation I-ID, and every R-ID or I-ID cited by a Tests
+#     entry (ID-range endpoints included, e.g. R3-R7) names an existing
+#     requirement or implementation entry;
 #   - justification lines match "- J<digits>(.<digits>)*[.] Text" and
 #     justification IDs are unique;
-#   - a prefixed entry (R, A, V, T, J) must not continue onto an indented
+#   - a prefixed entry (R, E, I, V, T, J) must not continue onto an indented
 #     next line: one entry occupies exactly one line;
 #   - prefixed entries form a flat list: a line that is itself indented
 #     prefixed entry (matching leading whitespace + "- R2.1." style)
@@ -46,7 +52,7 @@
 #     fence state (the opening marker may carry a language tag):
 #     fenced lines are skipped by the literal scan, and headings
 #     inside a fence never switch the section; words whose
-#     digit directly follows a letter or digit (R1.2, A3, L1, v1.2,
+#     digit directly follows a letter or digit (R1.2, E3, I2, L1, v1.2,
 #     TLS1.2) — including the trailing digit of a cited dotted ID
 #     followed by its word (R1.3 minutes, R2.2 states), an identifier
 #     segment, not a value; and a number glued to a preceding ALL-CAPS
@@ -148,7 +154,7 @@ lint_spec() {
         # trailing word characters (30s, 3x) and decimal-separator
         # groups. Words starting with a letter never match by
         # construction: their digit follows a letter or digit (the
-        # master f7e5a21 FP rules for R1.2, A3, L1, v1.2, TLS1.2, and
+        # master f7e5a21 FP rules for R1.2, E3, I2, L1, v1.2, TLS1.2, and
         # the trailing digit of a cited dotted ID followed by its
         # word, R1.3 minutes). The remaining FP rule is
         # post-filtered: a number glued to a preceding ALL-CAPS word,
@@ -176,7 +182,7 @@ lint_spec() {
                 i = j
             }
         }
-        # One-line rule: a prefixed entry (R/A/V/T/J) must not continue onto
+        # One-line rule: a prefixed entry (R/E/I/V/T/J) must not continue onto
         # an indented next line. Flat-list rule: a line that is itself an
         # indented prefixed entry violates the flat list - hierarchy is
         # expressed by multi-level IDs only. This block runs first for every
@@ -188,18 +194,21 @@ lint_spec() {
         # entry already carries the flat-list error and must not also be
         # reported as a wrap of its parent.
         {
-            if ($0 ~ /^[ \t]+- [RAVTJ][0-9]/) {
+            if ($0 ~ /^[ \t]+- [RAEIVTJ][0-9]/) {
                 cid = $0
                 sub(/^[ \t]+- /, "", cid)
                 fam = substr(cid, 1, 1)
-                sub(/^[RAVTJ]/, "", cid)
+                sub(/^[RAEIVTJ]/, "", cid)
                 sub(/[^0-9.].*$/, "", cid)
                 sub(/\.$/, "", cid)
                 err(NR, "prefixed entries must be a flat list - indented child entry \"" fam cid "\" found; express hierarchy via multi-level IDs")
-                # only R-family children take part in the R group/leaf
-                # structure; seen keys are "." + numeric ID (no letter).
+                # only R- and I-family children take part in the
+                # group/leaf structure of their family; seen keys are
+                # "." + numeric ID (no letter).
                 if (fam == "R")
                     indented["." cid] = 1
+                if (fam == "I")
+                    iindented["." cid] = 1
                 pend = ""
                 next
             }
@@ -230,11 +239,30 @@ lint_spec() {
             # Configuration and Examples sections is scanned there,
             # requirement lines included.
         }
-        /^- A[0-9]+(\.[0-9]+)*\./ {
-            aid = $0; sub(/^- A/, "", aid); sub(/[^0-9.].*$/, "", aid); sub(/\.$/, "", aid)
-            pend = "A" aid; pendnr = NR
-            if (!("." aid in seen))
-                err(NR, "Examples entry A" aid " mirrors no requirement R" aid)
+        /^- I[0-9]+(\.[0-9]+)*[ .:]/ {
+            iid = $0; sub(/^- I/, "", iid); sub(/[^0-9.].*$/, "", iid); sub(/\.$/, "", iid)
+            itail = $0; sub(/^- I[0-9]+(\.[0-9]+)*/, "", itail)
+            # pend is set before the early-error paths, mirroring the
+            # R block, so a wrapped continuation of an already-erroring
+            # line is still diagnosed as its wrap.
+            pend = "I" iid; pendnr = NR
+            if (substr(itail, 1, 2) != ". ") {
+                err(NR, "implementation ID must be followed by a period and a space")
+                next
+            }
+            ikey = "." iid
+            if (ikey in iseen) {
+                err(NR, "duplicate implementation ID I" iid)
+                next
+            }
+            iseen[ikey] = substr($0, length($0), 1)
+            iln[ikey] = NR
+        }
+        /^- E[0-9]+(\.[0-9]+)*\./ {
+            eid = $0; sub(/^- E/, "", eid); sub(/[^0-9.].*$/, "", eid); sub(/\.$/, "", eid)
+            pend = "E" eid; pendnr = NR
+            if (!("." eid in seen))
+                err(NR, "Examples entry E" eid " mirrors no requirement R" eid)
         }
         /^- V[0-9]+(\.[0-9]+)*[ .:]/ {
             vid = $0; sub(/^- V/, "", vid); sub(/[^0-9.].*$/, "", vid); sub(/\.$/, "", vid)
@@ -263,17 +291,20 @@ lint_spec() {
                 next
             }
             tseen[tid] = 1
-            if (ttail !~ /R[0-9]/ && substr($0, length($0), 1) != ":")
-                err(NR, "Tests entry T" tid " cites no requirement R-ID")
-            # Citation existence: every R-ID cited on a Tests entry
-            # line (ID-range endpoints included, e.g. R3-R7) must name
-            # a requirement seen in this file. V and J citations are
+            if (ttail !~ /[RI][0-9]/ && substr($0, length($0), 1) != ":")
+                err(NR, "Tests entry T" tid " cites no requirement R-ID or implementation I-ID")
+            # Citation existence: every R-ID or I-ID cited on a Tests
+            # entry line (ID-range endpoints included, e.g. R3-R7) must
+            # name an entry seen in this file. V and J citations are
             # not checked.
             cre = $0
-            while (match(cre, /R[0-9]+(\.[0-9]+)*/)) {
+            while (match(cre, /[RI][0-9]+(\.[0-9]+)*/)) {
                 ctok = substr(cre, RSTART, RLENGTH)
-                if (!(("." substr(ctok, 2)) in seen))
+                ckey = "." substr(ctok, 2)
+                if (substr(ctok, 1, 1) == "R" && !(ckey in seen))
                     err(NR, "test T" tid " cites nonexistent requirement " ctok)
+                if (substr(ctok, 1, 1) == "I" && !(ckey in iseen))
+                    err(NR, "test T" tid " cites nonexistent implementation ID " ctok)
                 cre = substr(cre, RSTART + RLENGTH)
             }
         }
@@ -317,6 +348,36 @@ lint_spec() {
                     }
                     if (seen[p] == ".")
                         err(ln[p], "ancestor ID R" substr(p, 2) " of R" substr(k, 2) " is a leaf, must be a group (:)")
+                }
+            }
+            # The I family gets the same group/leaf, ancestor, and
+            # trailing-punctuation checks as R (unique IDs were checked
+            # inline; iseen keys are "." + numeric ID, like seen).
+            for (k in iseen) {
+                haschild = 0
+                for (j in iseen)
+                    if (j != k && index(j, k ".") == 1) { haschild = 1; break }
+                # an indented child (flat-list violation) still counts as
+                # a child: the flat-list error already flags it, the
+                # group/leaf consistency must not pile a second,
+                # misleading finding on top.
+                if (!haschild)
+                    for (j in iindented)
+                        if (index(j, k ".") == 1) { haschild = 1; break }
+                if (iseen[k] == ":" && !haschild)
+                    err(iln[k], "group ID I" substr(k, 2) " has no children")
+                if (iseen[k] == "." && haschild)
+                    err(iln[k], "leaf ID I" substr(k, 2) " has children - a group line ends with a colon")
+                if (iseen[k] != "." && iseen[k] != ":")
+                    err(iln[k], "implementation line I" substr(k, 2) " must end with . (leaf) or : (group)")
+                p = k
+                while (sub(/\.[0-9]+$/, "", p) > 0 && p != "") {
+                    if (!(p in iseen)) {
+                        err(iln[k], "ancestor ID I" substr(p, 2) " of I" substr(k, 2) " is missing")
+                        break
+                    }
+                    if (iseen[p] == ".")
+                        err(iln[p], "ancestor ID I" substr(p, 2) " of I" substr(k, 2) " is a leaf, must be a group (:)")
                 }
             }
             exit bad ? 2 : (warned ? 1 : 0)

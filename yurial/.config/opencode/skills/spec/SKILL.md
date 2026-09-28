@@ -189,7 +189,7 @@ Spec source of truth for: <component / feature name>
 What this component does and why it exists. The place for system-level
 purpose and explanations; may cite requirement IDs. Requirement lines
 never carry explanations (Requirements rules below); per-requirement examples
-and explanations live in Examples (Ax.y entries), per-decision rationale
+and explanations live in Examples (Ex.y entries), per-decision rationale
 in Justification (J entries).
 
 ## Scope
@@ -264,23 +264,41 @@ Citations use IDs and ID ranges (R3-R7). A citation covers the cited ID
 together with its whole subtree; a range covers every ID from its first
 endpoint to its last, subtrees included.
 
+## Implementation
+Optional; present when the internal rules of the realization are worth
+fixing. Implementation is the internal counterpart of Requirements:
+Requirements fixes hard behavior rules — the contract observed by
+external users of the component — while Implementation fixes
+implementation rules: changing them without changing Requirements does
+not change the behavior observed from outside. An entry fixes one
+internal rule — structure, algorithms, invariants not observable from
+outside — with a stable ID, flat (I1) or multi-level (I2.1), under the
+same ID syntax and line rules as R-IDs: unique per family, never
+renumbered, one entry per line, flat list, a group line ending with a
+colon, a leaf line with a period:
+- I1. The expiry wheel buckets timers by whole seconds.
+- I2. Timer wheel:
+- I2.1. A timer slot holds a list of pending entries.
+
 ## Examples
 Optional; present when any requirement needs an illustration or
-explanation. One entry per explained requirement, the A-ID mirroring the
-R-ID: A3 explains R3; A2 explains the R2 group with its subtree. An entry
+explanation. One entry per explained requirement, the E-ID mirroring the
+R-ID: E3 explains R3; E2 explains the R2 group with its subtree. An entry
 holds concrete input→output examples and explanations, no new
 requirements, and occupies exactly one line:
-- A3. `get("k")` on a key expired one second ago returns NOT_FOUND.
-- A2. R2 subtree: `put("k", v)` at t0; `get("k")` at t0+TTL+1 s returns NOT_FOUND; a write at t1 restarts the expiry clock (R2.2).
+- E3. `get("k")` on a key expired one second ago returns NOT_FOUND.
+- E2. R2 subtree: `put("k", v)` at t0; `get("k")` at t0+TTL+1 s returns NOT_FOUND; a write at t1 restarts the expiry clock (R2.2).
 
 ## Tests
 Optional; present when requirements are covered by recorded tests. One
 entry per test — a stable ID, flat (T1) or multi-level (T1.1), same ID
 syntax rules as R-IDs (unique, never renumbered, multi-level; not the
-R trailing-punctuation rule — it applies to R entries only); an ID with
-children is a group caption ending with a colon; a leaf entry cites the
-requirement IDs it covers, and every cited R-ID names an existing
-requirement. One entry occupies exactly one line, however long:
+R trailing-punctuation rule — it applies to R and I entries only); an
+ID with children is a group caption ending with a colon; a leaf entry
+cites the requirement IDs it covers — or, for a test checking an
+internal rule, implementation I-IDs — and every cited R-ID names an
+existing requirement, every cited I-ID an existing implementation
+entry. One entry occupies exactly one line, however long:
 - T1. Key expiry:
 - T1.1. get-expired-key returns NOT_FOUND (R3)
 - T1.2. last-write restarts the expiry clock (R2.2)
@@ -376,9 +394,10 @@ any format rule updates all three places in the same commit:
   separate sentences (into separate requirements when they state separate
   behavior features). At most one subordinate clause per sentence is
   allowed, and only a condition or time clause ("when the lease expires,
-  the message is redelivered"). A prefixed entry — a requirement
-  (R), an Examples entry (A), a Verification entry (V), a Tests entry (T),
-  a Justification entry (J) — occupies exactly one line of the spec file:
+   the message is redelivered"). A prefixed entry — a requirement
+   (R), an Implementation entry (I), an Examples entry (E), a Verification
+   entry (V), a Tests entry (T), a Justification entry (J) — occupies
+   exactly one line of the spec file:
   wrapping it onto several lines is forbidden, however long the line
   grows. Prefixed entries form a flat list: every entry line starts at
   the left margin, indentation before an entry is forbidden, and a
@@ -398,21 +417,22 @@ any format rule updates all three places in the same commit:
 - Stable IDs (R1, R2.1, R4.2.1, ...) are referenced by code comments, tests,
   and commits; never renumber — retire IDs (drop the statement, note the
   retirement in DEVIATIONS.md) instead. The same scheme governs the other
-  prefixed entry families — Examples (Ax.y), Verification (Vx.y), Tests
-  (Tx.y), Justification (Jx.y): IDs unique per family, never renumbered,
-  multi-level allowed (Rx.y.z, any depth; every ID at every level unique,
-  with the no-renumbering and retirement rules applying to every level
-  equally). What the families share is this ID syntax only — the R
-  trailing-punctuation rule (a leaf line ends with a period, a group line
-  with a colon) applies to R entries alone. An ID with children is
+  prefixed entry families — Implementation (Ix.y), Examples (Ex.y),
+  Verification (Vx.y), Tests (Tx.y), Justification (Jx.y): IDs unique per
+  family, never renumbered, multi-level allowed (Rx.y.z, any depth; every
+  ID at every level unique, with the no-renumbering and retirement rules
+  applying to every level equally). What the families share is this ID
+  syntax only — the trailing-punctuation rule (a leaf line ends with a
+  period, a group line with a colon) applies to R and I entries alone.
+  An ID with children is
   a group, not a requirement: its line is a caption ending with a colon and
   states no behavior. A citation of an ID covers it together with its whole
   subtree; an ID range (R3-R7) covers every ID between its endpoints,
   subtrees included.
 - Include concrete input→output examples for every nontrivial rule. A
   requirement line carries no example and no explanation; examples and
-  per-requirement explanations live in the Examples section as Ax.y entries
-  mirroring the requirement IDs they explain (A2.1 explains R2.1; A2 covers
+  per-requirement explanations live in the Examples section as Ex.y entries
+  mirroring the requirement IDs they explain (E2.1 explains R2.1; E2 covers
   the R2 subtree).
 - Record algorithms as behavior (steps, invariants, complexity bounds), not as
   implementation (no source files, class names, or private helpers).
@@ -522,8 +542,10 @@ any format rule updates all three places in the same commit:
   by recorded tests, the spec carries a Tests section with one entry per
   test: a stable ID — flat (T1) or multi-level (T1.1), same ID syntax
   rules as R-IDs (unique, never renumbered, multi-level; a group ID is
-  a caption ending with a colon) — citing the requirement IDs it covers,
-  each naming an existing requirement; one entry per line (one-line rule
+  a caption ending with a colon) — citing the requirement IDs it covers —
+  or, for a test checking an internal rule, implementation I-IDs — each
+  R-ID naming an existing requirement and each I-ID an existing
+  implementation entry; one entry per line (one-line rule
   above). A test per requirement ID is the default expectation (section `7`).
 
 ## 5. Post-change consistency check (always, before implementing)
@@ -532,11 +554,14 @@ First the mechanical pass: run `speclint` (shipped in this skill's
 directory) over the changed spec files — and over `specs/index.md` and
 `specs/GLOSSARY.md` when they are touched. It checks the prefixed-entry
 format — R-ID syntax (the ID immediately followed by a period and a
-space), group/leaf colon consistency, unique IDs, A↔R
-mirroring; V-ID, T-ID, and J-ID syntax with unique IDs per family; leaf
-Tests entries citing the R-IDs they cover, with every cited R-ID
-(ID-range endpoints included, e.g. `R3-R7`) naming an existing
-requirement; the one-line rule for R, A, V, T, and J entries (an entry
+space), group/leaf colon consistency, unique IDs, E↔R
+mirroring; I-ID syntax with the same group/leaf, ancestor, uniqueness,
+and trailing-punctuation checks as the R family; V-ID, T-ID, and J-ID
+syntax with unique IDs per family; leaf
+Tests entries citing the R-IDs or I-IDs they cover, with every cited
+R-ID or I-ID (ID-range endpoints included, e.g. `R3-R7`) naming an
+existing requirement or implementation entry; the one-line rule for
+R, E, I, V, T, and J entries (an entry
 continuing onto an indented next line is an error, including a
 continuation of a line that already carries an ID error); the flat-list
 rule — prefixed entries form a flat list without indentation or nested
@@ -565,7 +590,7 @@ margin (`` ``` `` or `~~~`; the opening marker may carry a language
 tag) toggles the fence state, fenced lines are skipped by the literal
 scan, and headings inside a fence never switch the section; words
 whose digit directly follows a letter or digit — ID and
-level tokens (R1.2, A3, L1, v1.2, TLS1.2), including the trailing
+level tokens (R1.2, E3, I2, L1, v1.2, TLS1.2), including the trailing
 digit of a cited dotted ID followed by its word (R1.3 minutes,
 R2.2 states) — an identifier segment, not a value; and a number glued
 to a preceding ALL-CAPS word, hyphen included (TLS 1.2, UTF-8). The
@@ -573,7 +598,7 @@ section is tracked by `^#+` headings — a heading line itself is not
 scanned, and a heading inside a fenced block does not count — and the
 check runs unconditionally: a spec without
 Interface or Configuration sections gets the same errors.
-Configuration table rows and Examples (A-)entries are exempt by
+Configuration table rows and Examples (E-)entries are exempt by
 construction: they are the line families where concrete values live.
 Exit status: `0` — clean, `1` — warnings
 but no errors, `2` — lint errors; a usage error (invalid invocation)
@@ -766,8 +791,9 @@ three places together (section `4` preamble).
 - Compound requirements: one line bundling several behavior features
   ("expires after TTL seconds and reads of expired keys return NOT_FOUND") —
   one feature per requirement; split it (section `4` writing rules).
-- A prefixed entry — a requirement (R), an Examples entry (A), a
-  Verification entry (V), a Tests entry (T), a Justification entry (J) —
+- A prefixed entry — a requirement (R), an Implementation entry (I), an
+  Examples entry (E), a Verification entry (V), a Tests entry (T), a
+  Justification entry (J) —
   wrapped onto several lines of the spec file — one entry, one line;
   wrapping is forbidden however long the line grows (section `4` writing
   rules).
@@ -784,21 +810,23 @@ three places together (section `4` preamble).
   line — requirement lines declare only; system-level purpose lives in
   Overview, per-decision rationale lives in the Justification section as
   Jx.y entries citing the requirement or configuration IDs they justify,
-  and examples and per-requirement explanations live in the Examples
-  section as Ax.y entries mirroring R-IDs (section `4`).
+   and examples and per-requirement explanations live in the Examples
+   section as Ex.y entries mirroring R-IDs (section `4`).
 - A Jx.y Justification entry citing no live requirement or configuration
   entry — a dangling rationale; delete it or re-point it when the
   justified decision retires (section `4`).
 - A group line that states a requirement, or a leaf ID carrying children —
   an ID with children is a group caption ending with a colon; a leaf ends
   with a period (section `4`).
-- An Ax.y Examples entry with no matching Rx.y — a dangling explanation;
+- An Ex.y Examples entry with no matching Rx.y — a dangling explanation;
   delete it or re-point it when the requirement retires (section `4`).
 - Recorded test entries with no stable T-ID, or a Tests entry citing no
-  live requirement R-ID — no R-ID cited at all, or a cited R-ID naming
-  no existing requirement — a dangling test tracing to no live
-  requirement verifies nothing spec-backed; give it a T-ID and the
-  R-IDs it covers, re-point it when the covered requirement retires,
+  live requirement R-ID or implementation I-ID — no ID cited at all, or
+  a cited R-ID naming no existing requirement, or a cited I-ID naming
+  no existing implementation entry — a dangling test tracing to no live
+  requirement or internal rule verifies nothing spec-backed; give it a
+  T-ID and the R-IDs (I-IDs) it covers, re-point it when the covered
+  requirement or implementation entry retires,
   or drop it (section `4`).
 - Undefined local terms in requirements: project jargon or ad-hoc names whose
   interpretation is fixed nowhere — no Definitions entry, no GLOSSARY.md row;
@@ -835,7 +863,10 @@ three places together (section `4` preamble).
   the stable reference (section `4` writing rules).
 
 ### Structure and scope
-- Spec detailing private implementation (locks refactoring into the contract).
+- Spec detailing private implementation inside Requirements (locks
+  refactoring into the contract) — internal rules belong in the
+  Implementation section as I-entries, where their change prescribes no
+  observable-behavior difference (section `4`).
 - Mixing units/naming with sibling specs (the shared-vocabulary check exists
   for this).
 
