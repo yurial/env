@@ -3,6 +3,7 @@
   "share": "disabled",
   "discard_context": true,
   "default_agent": "main",
+  "subagent_depth": 4,
   "model": "myzai/flash",
   "small_model": "myzai/flash",
   "provider": {
