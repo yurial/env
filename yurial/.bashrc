@@ -25,8 +25,8 @@ HISTCONTROL=ignoreboth
 HISTSIZE=1000000
 HISTFILESIZE=10000000
 
-EDITOR=vim
-PATH="$HOME/.bin:$HOME/.local/bin:$HOME/.opencode/bin:$HOME/.bun/bin:/usr/sbin:/sbin:$PATH"
+export EDITOR=vim
+export PATH="$HOME/.bin:$HOME/.local/bin:$HOME/.opencode/bin:$HOME/.bun/bin:/usr/sbin:/sbin:$PATH"
 ZAI_ORIGINAL_URL='https://api.z.ai/api/coding/paas/v4'
 
 alias agrep="grep --colour=auto --colour=auto --exclude-dir=.git --exclude-dir=deps --exclude-dir=build --exclude-dir=new_reports -Rn"
