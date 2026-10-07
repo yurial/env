@@ -1,0 +1,2 @@
+# runtime state (default GITLAB_TOOLS_STATE_DIR resolves here)
+.state/

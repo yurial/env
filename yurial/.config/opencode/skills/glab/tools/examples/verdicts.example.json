@@ -1,0 +1,18 @@
+[
+  {
+    "action": "acknowledge",
+    "thread_hint": "fiber cancellation unwind",
+    "text": "Подтверждаю: проблема воспроизводится, заводим задачу на исправление и отмечу ветку треда решённой после фикса."
+  },
+  {
+    "action": "contest",
+    "thread_hint": "PipelineFollower::RunStep",
+    "text": "Не согласен: исключение перехватывается выше по стеку в RunPipeline, покрыто тестом t327; уточню комментарий в коде, чтобы вопрос не возникал повторно."
+  },
+  {
+    "action": "new",
+    "path": "flow/runtime/ytflow/pipeline_follower.cpp",
+    "line": 102,
+    "text": "Здесь не хватает guard'а на пустой список шагов: при steps == nullptr цикл не выполняется, но и лог не пишется."
+  }
+]

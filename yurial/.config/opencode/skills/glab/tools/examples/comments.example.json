@@ -1,0 +1,18 @@
+[
+  {
+    "path": "flow/runtime/ytflow/pipeline_follower.cpp",
+    "line": 102,
+    "body": "AI generated: batch check - fiber cancellation unwind at step.Run() (line 102) escapes the only catch in RunStep."
+  },
+  {
+    "path": "flow/runtime/ytflow/pipeline_follower.cpp",
+    "line": 99999,
+    "body": "AI generated: batch check with a deliberately out-of-hunk line; must post unpositioned."
+  },
+  {
+    "path": ".gitlab-ci.yml",
+    "line": 722,
+    "old_side": true,
+    "body": "AI generated: batch check on the old side of the removed release-guard line."
+  }
+]

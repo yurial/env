@@ -1,6 +1,6 @@
 ---
 name: glab
-description: Use when working with GitLab from the command line via glab (GitLab CLI): listing, viewing, creating, checking out, approving, and merging merge requests (MRs), writing MR descriptions (Russian description, English commit message), reading and posting MR comments (line-anchored comments), batch posting of review comments, line-anchor validation against diff hunks, review comments via draft review (draft notes, publish all at once), discussion replies via GraphQL fallback, thread resolution state, processing incoming review comments as the MR author (individual comment workflow, resolve discipline), filtering MRs by role (reviewer, assignee, author), draft/WIP MRs, managing issues, checking CI/CD pipelines and jobs, and calling the GitLab REST API via `glab api` (fields, bodies, pagination, URL-encoded paths). Covers glab-specific traps: repository context, scope=all, iid vs id, pagination, flag collisions, HTTP 401/403/404 disambiguation, non-interactive usage. Use ONLY for glab/GitLab CLI operations, not for plain git workflows or other forges.
+description: Use when working with GitLab from the command line via glab (GitLab CLI): listing, viewing, creating, checking out, approving, and merging merge requests (MRs), writing MR descriptions (Russian description, English commit message), reading and posting MR comments (line-anchored comments), batch posting of review comments, line-anchor validation against diff hunks, review comments via draft review (draft notes, publish all at once), discussion replies via GraphQL fallback, thread resolution state, processing incoming review comments as the MR author (individual comment workflow, resolve discipline), filtering MRs by role (reviewer, assignee, author), draft/WIP MRs, managing issues, checking CI/CD pipelines and jobs, and calling the GitLab REST API via `glab api` (fields, bodies, pagination, URL-encoded paths), preferring the bundled gitlab-tools scripts (tools/ next to this skill) as the mechanical path for MR update polling with state markers, thread dumps, single line-anchored comments, batch draft review with safe publish, discussion replies, and single-thread resolve. Covers glab-specific traps: repository context, scope=all, iid vs id, pagination, flag collisions, HTTP 401/403/404 disambiguation, non-interactive usage. Use ONLY for glab/GitLab CLI operations, not for plain git workflows or other forges.
 ---
 
 # glab: GitLab CLI — typical workflows and traps
@@ -15,7 +15,10 @@ resolution state, processing incoming review comments as the author
 (one comment at a time, resolve discipline), the REST API via
 `glab api` (fields, bodies, URL-encoded
 paths, pagination) and GraphQL via `glab api graphql`, reading HTTP errors,
-issues, and CI/CD pipelines and jobs.
+issues, and CI/CD pipelines and jobs. Alongside these manual protocols the
+skill carries the gitlab-tools toolkit (section 22) — bash+python3 scripts
+in `tools/` next to this file that implement the review workflows
+mechanically and are the preferred path for their operations.
 Verified against glab 1.36.0; behavior marked instance-dependent was
 observed live on a self-managed GitLab 18.7.7-ee and is not guaranteed on
 other instances. On another glab version re-check flags with
@@ -616,3 +619,44 @@ glab ci retry <job-id>          # retry a job — by numeric job id or job name
 Note: `trace` and `retry` address jobs, not pipelines; without an argument
 they prompt to select a job interactively — pass the job id or name
 explicitly in non-interactive runs (section 3).
+
+## 22. gitlab-tools: the bundled mechanical toolkit
+
+The skill ships a bash+python3 toolkit in `tools/` next to this SKILL.md.
+The scripts wrap `glab api` and mechanically enforce the protocols and
+traps of sections 10, 11, 17, 18, and 19 — local anchor validation, the
+`AI generated:` prefix, verification by follow-up GET, the GraphQL reply
+fallback, pagination. Full contracts (arguments, exit codes, guards,
+stdout sections) are documented in `tools/README.md`; the gitlab-tools
+topic of SPEC.md is normative for this section. Exit codes: 0 success,
+1 failure, 2 usage error; output is plain text.
+
+One line per script:
+
+- `mr-updates.sh <project> <iid> [--since <iso8601|sha>] [--state <file>] [--fetch]` — MR state, new commits (diffstat inside a clone), new notes, and thread status changes; with `--state` only the delta since the marker (additive schema, a masked sha is never stored as a cutoff).
+- `mr-threads.sh <project> <iid> [--open|--all] [--ai-only] [--max-chars N] [--full]` — readable thread dump: discussion id, resolved state, anchor, authors, bodies; GET-only.
+- `mr-comment.sh <project> <iid> <path> <line> <body-or-@file> [--old-side] [--no-prefix] [--force] [--dry-run] [--repo <dir>]` — one line-anchored comment: sha recovery, local hunk validation (refuses outside hunks with the valid ranges; `--force` posts unpositioned with `path:line` prepended), POST verified by GET.
+- `mr-draft-review.sh <project> <iid> <comments.json> [--publish] [--dry-run] [--no-prefix] [--repo <dir>] [--ignore-stray]` — batch review via draft notes: validation table, stray-draft refusal (pre-existing pending drafts abort the run), drafts verified by GET; `--publish` publishes only this run's drafts one by one, with `bulk_publish` as an explicitly warned fallback; reply items post immediately via `mr-reply.sh`.
+- `mr-reply.sh <project> <iid> <discussion_id> <body-or-@file> [--no-prefix] [--dry-run]` — reply into an existing thread: REST first, verified to sit inside the discussion by GET, GraphQL `createNote` fallback on 404 or the silent orphan, verified again.
+- `mr-resolve.sh <project> <iid> <discussion_id> [--unresolve] [--dry-run]` — resolve/unresolve exactly ONE thread: guards decided by GET (existence, resolvable notes, idempotent state), state verified by GET after the PUT; no batch mode by design.
+- `mr-verify-report.sh <project> <iid> <verdicts.json> [--emit <out.json>] [--post] [--yes] [--repo <dir>]` — verdict plan (acknowledge/contest located by a thread hint, `new` anchored items): the full plan is printed before any write; `--emit` writes a batch for `mr-draft-review.sh`; posting requires `--yes`; it never publishes.
+
+When to prefer the tools: use them instead of hand-built glab calls for
+exactly these operations — update polling with a state marker, thread
+dumps, a single anchored comment, a batch review, a discussion reply, a
+single-thread resolve. Raw glab stays the path for everything else
+(MR/issue/CI operations, lists, descriptions, merges) and for
+understanding the underlying API semantics: the tools automate the
+protocols above, they do not replace the knowledge behind them.
+
+Configuration: optional `tools/config.sh` fills site defaults only when the
+environment has not set the variable — precedence
+`environment > config.sh > built-in defaults`: `GITLAB_HOST` (instance host
+of every call), `GITLAB_DEFAULT_PROJECT` (the `<project>` positional may be
+omitted), `GITLAB_REPO` (clone for sha recovery and hunk building; default:
+the clone containing the current directory), `GITLAB_TOOLS_STATE_DIR`
+(default `<tools>/.state`, created on demand). The toolkit is
+location-independent — it resolves its library, config, and state directory
+relative to its own location. Anchored writes need a git clone of the
+project (masked shas and collapsed `/diffs` are worked around locally);
+without one, `mr-comment.sh` degrades to an unpositioned post and says so.
