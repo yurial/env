@@ -165,7 +165,7 @@ if [ "$n_drafts" -gt 0 ]; then
     diff_head="$(gt_diff_head "$repo")"
   else
     diff_head=""
-    gt_warn "no git clone available: anchors cannot be validated locally; out-of-hunk drafts will be posted unpositioned"
+    gt_warn "no git clone available: anchors cannot be validated locally; all drafts will be posted unpositioned with 'path:line' prepended"
   fi
   while IFS= read -r p; do
     [ -n "$p" ] || continue
@@ -208,7 +208,10 @@ for c in json.load(open(entries, encoding="utf-8")):
         except OSError:
             pass
     ok = any(s == side and a <= c["line"] <= b for s, a, b in ranges)
-    positioned = 1 if (ok or not repo) else 0
+    # never a blind positioned POST (GLAB-S-66): an anchor that could not be
+    # validated (no clone / no local diff) is posted unpositioned with
+    # "path:line" prepended, like mr-comment.sh
+    positioned = 1 if ok else 0
     status = "ok" if ok else ("cannot-validate (no clone)" if not repo else "will-post-unpositioned")
     rows.append((c["idx"], c["path"], c["line"], side, positioned, status))
 with open(manifest, "w") as f:
@@ -221,6 +224,29 @@ for idx, p, line, side, _, status in rows:
         print(f"{idx:>3}  {status:<40} (reply, posted at once)")
     else:
         print(f"{idx:>3}  {status:<40} {p}:{line} ({side} side)")
+PY
+
+# 3b) the exact bodies that will be sent: will-post-unpositioned and
+# cannot-validate drafts carry "path:line\n\n" after the prefix. Creation
+# (step 4) and GET verification (step 5) both read these, so verification
+# compares against precisely the bodies that were POSTed.
+sent_bodies="$GT_API_TMP/sent_bodies.json"
+python3 - "$GT_API_TMP/entries.json" "$manifest" "$sent_bodies" "$GT_PREFIX" <<'PY'
+import json, sys
+entries_path, manifest_path, out_path, prefix = sys.argv[1:5]
+positioned = {}
+for row in open(manifest_path):
+    idx, p, _line, _side, pos, _status = row.rstrip("\n").split("\t")
+    if p != "-":
+        positioned[int(idx)] = int(pos)
+sent = {}
+for c in json.load(open(entries_path, encoding="utf-8")):
+    body = c["body"]
+    if c["kind"] == "draft" and not positioned.get(c["idx"], 1):
+        pre = f"{c['path']}:{c['line']}\n\n"
+        body = (prefix + pre + body[len(prefix):]) if body.startswith(prefix) else (pre + body)
+    sent[str(c["idx"])] = body
+json.dump(sent, open(out_path, "w", encoding="utf-8"), ensure_ascii=False)
 PY
 
 # reply targets must exist (GET, read-only; also done for --dry-run)
@@ -315,17 +341,13 @@ if [ "$n_drafts" -gt 0 ]; then
     IFS=$'\t' read -r idx p line side positioned _ <<< "$row"
     if [ "$p" = "-" ]; then continue; fi  # reply rows are handled below
     i=$((i + 1))
-    payload="$(python3 - "$GT_API_TMP/entries.json" "$idx" "$p" "$line" "$side" "$positioned" "$GT_BASE" "$GT_START" "$GT_HEAD" "$GT_PREFIX" <<'PY'
+    payload="$(python3 - "$sent_bodies" "$idx" "$p" "$line" "$side" "$positioned" "$GT_BASE" "$GT_START" "$GT_HEAD" <<'PY'
 import json, sys
-entries = {c["idx"]: c for c in json.load(open(sys.argv[1], encoding="utf-8"))}
-idx, p, line, side, positioned = int(sys.argv[2]), sys.argv[3], int(sys.argv[4]), sys.argv[5], int(sys.argv[6])
-base, start, head, prefix = sys.argv[7], sys.argv[8], sys.argv[9], sys.argv[10]
-c = entries[idx]
-body = c["body"]
-if not positioned:
-    pre = f"{p}:{line}\n\n"
-    body = (prefix + pre + body[len(prefix):]) if body.startswith(prefix) else (pre + body)
-payload = {"note": body}
+sent = json.load(open(sys.argv[1], encoding="utf-8"))
+idx, p, line = int(sys.argv[2]), sys.argv[3], int(sys.argv[4])
+side, positioned = sys.argv[5], int(sys.argv[6])
+base, start, head = sys.argv[7], sys.argv[8], sys.argv[9]
+payload = {"note": sent[str(idx)]}  # exactly the body that gets POSTed
 if positioned:
     pos = {"position_type": "text", "base_sha": base, "start_sha": start,
            "head_sha": head, "old_path": p, "new_path": p}
@@ -350,10 +372,11 @@ fi
 # 5) verify drafts by GET (never trust POST responses alone)
 if [ "$n_drafts" -gt 0 ]; then
   gt_get_all "$ep/draft_notes" > "$GT_API_TMP/drafts.jsonlines"
-  python3 - "$GT_API_TMP/entries.json" "$manifest" "$GT_API_TMP/drafts.jsonlines" "$ep" <<'PY'
+  python3 - "$GT_API_TMP/entries.json" "$manifest" "$GT_API_TMP/drafts.jsonlines" "$sent_bodies" <<'PY'
 import json, sys
 entries = {c["idx"]: c for c in json.load(open(sys.argv[1], encoding="utf-8"))}
-manifest, drafts_path, ep = sys.argv[2], sys.argv[3], sys.argv[4]
+manifest, drafts_path, sent_path = sys.argv[2], sys.argv[3], sys.argv[4]
+sent = json.load(open(sent_path, encoding="utf-8"))
 drafts = [json.loads(l) for l in open(drafts_path) if l.strip()]
 print("== drafts verified via GET ==")
 n_draft_entries = sum(1 for c in entries.values() if c["kind"] == "draft")
@@ -364,8 +387,8 @@ for row in open(manifest):
     if p == "-":
         continue
     idx = int(idx)
-    c = entries[idx]
-    matches = [d for d in drafts if (d.get("note") or "") == c["body"]]
+    want = sent[str(idx)]  # the exact body that was POSTed (prepend included)
+    matches = [d for d in drafts if (d.get("note") or "") == want]
     if matches:
         d = max(matches, key=lambda x: x.get("id") or 0)
         ids.append(d["id"])

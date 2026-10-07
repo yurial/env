@@ -48,9 +48,6 @@ if [ -n "$proj" ] && [ -z "$iid" ] && [ -n "$GITLAB_DEFAULT_PROJECT" ]; then
   iid="$proj"; proj="$GITLAB_DEFAULT_PROJECT"
 fi
 [ -n "$proj" ] && [ -n "$iid" ] || usage
-if [ -n "$since" ] && [ -n "$state_file" ] && [ -f "$state_file" ]; then
-  gt_note "--state marker exists; --since is ignored for the delta"
-fi
 # a bare --state filename lives in GITLAB_TOOLS_STATE_DIR (created on demand)
 if [ -n "$state_file" ]; then
   case "$state_file" in
@@ -58,6 +55,9 @@ if [ -n "$state_file" ]; then
     *) state_file="$GITLAB_TOOLS_STATE_DIR/$state_file" ;;
   esac
   mkdir -p "$(dirname "$state_file")"
+fi
+if [ -n "$since" ] && [ -n "$state_file" ] && [ -f "$state_file" ]; then
+  gt_note "--state marker exists; --since is ignored for the delta"
 fi
 
 enc="$(gt_urlencode "$proj")"
@@ -85,7 +85,7 @@ mr_title="${f[0]}"; mr_state="${f[1]}"; mr_draft="${f[2]}"; mr_updated="${f[3]}"
 src_branch="${f[4]}"; tgt_branch="${f[5]}"; api_head="${f[6]}"
 
 # real head sha; the API masks 40-hex values per response, short_id survives
-head_sha=""; head_short=""; head_src=""
+head_sha=""; head_short=""; head_created=""; head_src=""
 head_fields="$GT_API_TMP/head.fields"
 if gt_try_get "$mr_ep/commits?per_page=1" "$GT_API_TMP/commits1.jsonlines"; then
   python3 - "$GT_API_TMP/commits1.jsonlines" > "$head_fields" <<'PY'
@@ -121,7 +121,6 @@ if ! gt_is_sha "$head_sha" && [ -n "$repo" ]; then
   s="$(gt_git_sha "$repo" "refs/heads/$src_branch")"
   if [ -n "$s" ]; then head_sha="$s"; head_src="local git ($src_branch, may be stale)"; fi
 fi
-[ -n "$head_created" ] || head_created=""
 
 echo "== MR state =="
 echo "project:      $proj"

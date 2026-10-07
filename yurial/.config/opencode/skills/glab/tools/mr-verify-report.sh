@@ -152,7 +152,8 @@ import json, sys
 plan = json.load(open(sys.argv[1], encoding="utf-8"))
 disc = [json.loads(l) for l in open(sys.argv[2]) if l.strip()]
 out, prefix = sys.argv[3], sys.argv[4]
-# discussions with our original notes: first line per discussion for reports
+# discussions with our original notes: full bodies, so thread_hint matches
+# anywhere in the note text (a substring of the original note, GLAB-S-64)
 ours = {}
 for d in disc:
     hits = []
@@ -161,8 +162,7 @@ for d in disc:
             continue
         body = n.get("body") or ""
         if body.startswith(prefix):
-            first = body.splitlines()[0] if body.splitlines() else ""
-            hits.append(first)
+            hits.append(body)
     if hits:
         ours[d.get("id", "?")] = hits
 errors = []
