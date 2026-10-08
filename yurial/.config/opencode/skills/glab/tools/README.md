@@ -22,7 +22,7 @@ Every assignment only fills an unset/empty variable, so the precedence is:
 | variable                 | default                   | meaning                                            |
 |--------------------------|---------------------------|----------------------------------------------------|
 | `GITLAB_HOST`            | `gitlab.corp.mail.ru`     | instance host for every API call                   |
-| `GITLAB_DEFAULT_PROJECT` | (empty)                   | `<project>` positional may be omitted when set; the remaining positionals shift left (mr-updates/mr-threads: 1 arg, mr-draft-review/mr-resolve/mr-verify-report: 2 args, mr-reply: 3 args, mr-comment: 4 args) |
+| `GITLAB_DEFAULT_PROJECT` | (empty)                   | `<project>` positional may be omitted when set; the remaining positionals shift left (mr-updates/mr-threads/mr-verify-posted: 1 arg, mr-draft-review/mr-resolve/mr-verify-report: 2 args, mr-reply: 3 args, mr-comment: 4 args) |
 | `GITLAB_REPO`            | (cwd)                     | git clone used for sha recovery / hunks            |
 | `GITLAB_TOOLS_STATE_DIR` | `<tools>/.state` (next to `lib.sh`) | directory for `--state` marker files given as a bare filename (mr-updates.sh); created on demand |
 | `GITLAB_TOKEN`           | glab config               | auth token, honored by glab itself                 |
@@ -78,6 +78,8 @@ Exit codes: 0 success, 1 failure, 2 usage error.
    Write scripts never trust the POST/PUT response: they verify by follow-up
    GET (`mr-comment.sh`, `mr-draft-review.sh`, `mr-resolve.sh`, and
    `mr-reply.sh`), and GraphQL results are re-verified through REST as well.
+   The read-only after-the-fact re-check of what actually landed is
+   `mr-verify-posted.sh`.
 8. **Every posted comment must start with the prefix `AI generated: `.**
    All write scripts refuse to post otherwise, unless `--no-prefix` is
    passed.
@@ -267,6 +269,71 @@ mr-draft-review.sh ai/streamflow/flowruntime 1887 batch.json
 
 A sample verdict list is in `examples/verdicts.example.json`.
 
+## mr-verify-posted.sh
+
+```
+mr-verify-posted.sh <project> <mr_iid> [--expect <expected.json>]
+                     [--drafts] [--max-note-id] [--ai-only]
+                     [--max-chars N] [--full]
+```
+
+Read-only post-publish verifier: GET-only, no POST/PUT/DELETE is ever sent
+(the write tools verify their own writes; this one re-checks afterwards,
+e.g. after a `mr-draft-review.sh --publish` run plus raw timeline notes —
+use it instead of ad-hoc inline verification scripts). Three checks:
+
+- `--drafts` - the pending `draft_notes` of your user on the MR: count + ids
+  (the pre-existing-draft check before a batch run).
+- `--max-note-id` - the highest note id on the MR (marker/baseline for
+  follow-up posts, same basis as the `mr-updates.sh --state` marker). With
+  `--ai-only` only notes starting with `AI generated: ` count.
+- `--expect <expected.json>` - verifies expected comment bodies against the
+  discussions listing. The file uses the `mr-draft-review.sh`
+  comments.json schema: `{"path":..., "line":N, "body":..., "old_side":
+  optional}` anchored items (match = body byte-equality AND position
+  `new_path`/`new_line`, or `old_path`/`old_line` with `old_side`),
+  `{"body":...}` unanchored items (body byte-equality anywhere on the MR),
+  and `{"reply_to_discussion_id":..., "body":...}` reply items (body
+  byte-equality inside that discussion). A body starting with `@` names a
+  file read verbatim, the trailing newline included (the same @file
+  convention as `mr-comment.sh` / `mr-reply.sh`; `@-` stdin is not
+  supported here). No prefix is forced: expected bodies are the FINAL
+  posted bodies, compared byte-exactly as given - an out-of-hunk batch
+  item posts unpositioned with `path:line` prepended after the prefix
+  (`mr-draft-review.sh`), so expect that prepended body for such items.
+  `--ai-only` narrows the candidate notes to `AI generated: ` ones.
+
+Verdicts per expected item (each verdict line carries the discussion id,
+note id, anchor, and resolved flag):
+
+- `ok` - byte-equal body at the required place;
+- `anchor-mismatch` - the exact body exists but is anchored differently;
+- `body-mismatch` - the expected place exists (an anchor is occupied, the
+  discussion exists, or the body exists elsewhere on the MR) but body and
+  place never coincide - this catches the orphan-reply trap (a reply that
+  landed outside its thread);
+- `not-found` - neither the body nor the expected place found.
+
+Exit codes: 1 when any expected item is not `ok`, 0 when only the
+informational flags were requested, 2 usage. Traps handled: pagination,
+concatenated page arrays, error detection by body/stderr (never the glab
+exit code), thread resolved == every non-system note resolved (no
+discussion-level flag on this instance).
+
+Example:
+
+```
+mr-verify-posted.sh ai/streamflow/flowruntime 1903 \
+  --expect comments.json --drafts --max-note-id
+```
+
+A sample expectations file is in `examples/expect.example.json`; it pairs
+with `examples/comments.example.json`: the first and third batch items
+verify byte-exactly (the third via the `@file` body
+`examples/comments.example.body.txt`, byte-identical to the batch body),
+while the second (line 99999) posts unpositioned with `path:line`
+prepended and would have to be expected with that final body.
+
 ## Testing notes
 
 Read-only scripts (`mr-updates.sh`, `mr-threads.sh`) were exercised against
@@ -294,3 +361,10 @@ already-resolved, non-resolvable thread); nothing was resolved or
 unresolved. `mr-verify-report.sh` ran plan generation and `--emit` on real
 data without `--yes`. `bulk_publish` and the single-draft publish route
 were never executed against a real draft.
+
+`mr-verify-posted.sh` was exercised live against MR !1903 after a real
+review session: three anchored items (byte-exact bodies from the posted
+comments.json) plus one unanchored timeline note all matched with the
+expected note ids, anchors, and resolved flags; draft count 0; max note id
+reported; a deliberately bogus expected body answered `not-found` with
+exit 1; `@file` bodies and `--ai-only` re-verified the same set.

@@ -1,0 +1,20 @@
+[
+  {
+    "path": "flow/runtime/ytflow/pipeline_follower.cpp",
+    "line": 102,
+    "body": "AI generated: batch check - fiber cancellation unwind at step.Run() (line 102) escapes the only catch in RunStep."
+  },
+  {
+    "path": ".gitlab-ci.yml",
+    "line": 722,
+    "old_side": true,
+    "body": "@examples/comments.example.body.txt"
+  },
+  {
+    "body": "AI generated: summary note of the review round (unanchored, posted on the MR timeline)."
+  },
+  {
+    "reply_to_discussion_id": "1ba268fb6712127820af0b181b3f2633e110aef4",
+    "body": "AI generated: reply into the first thread of the batch above."
+  }
+]

@@ -1,6 +1,6 @@
 ---
 name: glab
-description: Use when working with GitLab from the command line via glab (GitLab CLI): listing, viewing, creating, checking out, approving, and merging merge requests (MRs), writing MR descriptions (Russian description, English commit message), reading and posting MR comments (line-anchored comments), batch posting of review comments, line-anchor validation against diff hunks, review comments via draft review (draft notes, publish all at once), discussion replies via GraphQL fallback, thread resolution state, processing incoming review comments as the MR author (individual comment workflow, resolve discipline), filtering MRs by role (reviewer, assignee, author), draft/WIP MRs, managing issues, checking CI/CD pipelines and jobs, and calling the GitLab REST API via `glab api` (fields, bodies, pagination, URL-encoded paths), preferring the bundled gitlab-tools scripts (tools/ next to this skill) as the mechanical path for MR update polling with state markers, thread dumps, single line-anchored comments, batch draft review with safe publish, discussion replies, and single-thread resolve. Covers glab-specific traps: repository context, scope=all, iid vs id, pagination, flag collisions, HTTP 401/403/404 disambiguation, non-interactive usage. Use ONLY for glab/GitLab CLI operations, not for plain git workflows or other forges.
+description: Use when working with GitLab from the command line via glab (GitLab CLI): listing, viewing, creating, checking out, approving, and merging merge requests (MRs), writing MR descriptions (Russian description, English commit message), reading and posting MR comments (line-anchored comments), batch posting of review comments, line-anchor validation against diff hunks, review comments via draft review (draft notes, publish all at once), discussion replies via GraphQL fallback, thread resolution state, processing incoming review comments as the MR author (individual comment workflow, resolve discipline), filtering MRs by role (reviewer, assignee, author), draft/WIP MRs, managing issues, checking CI/CD pipelines and jobs, and calling the GitLab REST API via `glab api` (fields, bodies, pagination, URL-encoded paths), preferring the bundled gitlab-tools scripts (tools/ next to this skill) as the mechanical path for MR update polling with state markers, thread dumps, single line-anchored comments, batch draft review with safe publish, discussion replies, single-thread resolve, and read-only post-publish verification of posted comments: draft count, max note id, body/anchor verification. Covers glab-specific traps: repository context, scope=all, iid vs id, pagination, flag collisions, HTTP 401/403/404 disambiguation, non-interactive usage. Use ONLY for glab/GitLab CLI operations, not for plain git workflows or other forges.
 ---
 
 # glab: GitLab CLI — typical workflows and traps
@@ -18,7 +18,8 @@ paths, pagination) and GraphQL via `glab api graphql`, reading HTTP errors,
 issues, and CI/CD pipelines and jobs. Alongside these manual protocols the
 skill carries the gitlab-tools toolkit (section 22) — bash+python3 scripts
 in `tools/` next to this file that implement the review workflows
-mechanically and are the preferred path for their operations.
+mechanically — including the read-only post-publish verifier
+`mr-verify-posted.sh` — and are the preferred path for their operations.
 Verified against glab 1.36.0; behavior marked instance-dependent was
 observed live on a self-managed GitLab 18.7.7-ee and is not guaranteed on
 other instances. On another glab version re-check flags with
@@ -281,7 +282,9 @@ protocol:
   the reference by writing `<path>:<line>` into the text.
 - Save `discussion_id`/`note_id` from every POST response: the final
   verification is then the set of saved ids, not a full re-fetch of all
-  discussions.
+  discussions. The read-only after-the-fact check that the expected bodies
+  are really posted (byte-exact, with anchors) is mechanized by
+  `mr-verify-posted.sh --expect` (section 22).
 - Instance-dependent (observed once on GitLab 18.7.7-ee): a raw-body POST
   (`--input`) returned rc=0 with `{"message":"500 Internal Server Error"}`
   in the body while the note had in fact been created — after mass writes
@@ -370,7 +373,9 @@ Order of operations for a review: fetch `diff_refs` from the single-MR
 endpoint → validate every anchor against hunk ranges (section 10) →
 create N drafts (failures by response body) → verify the draft list via
 GET → one `bulk_publish` → optionally verify the published notes via the
-discussions endpoint (section 17).
+discussions endpoint (section 17) — mechanized by `mr-verify-posted.sh`
+(section 22), which also reports the pending-draft count and the max note
+id baseline.
 
 - The mandatory `AI generated:` prefix (section 9) applies to every draft
   note as to every other comment.
@@ -640,11 +645,14 @@ One line per script:
 - `mr-reply.sh <project> <iid> <discussion_id> <body-or-@file> [--no-prefix] [--dry-run]` — reply into an existing thread: REST first, verified to sit inside the discussion by GET, GraphQL `createNote` fallback on 404 or the silent orphan, verified again.
 - `mr-resolve.sh <project> <iid> <discussion_id> [--unresolve] [--dry-run]` — resolve/unresolve exactly ONE thread: guards decided by GET (existence, resolvable notes, idempotent state), state verified by GET after the PUT; no batch mode by design.
 - `mr-verify-report.sh <project> <iid> <verdicts.json> [--emit <out.json>] [--post] [--yes] [--repo <dir>]` — verdict plan (acknowledge/contest located by a thread hint, `new` anchored items): the full plan is printed before any write; `--emit` writes a batch for `mr-draft-review.sh`; posting requires `--yes`; it never publishes.
+- `mr-verify-posted.sh <project> <iid> [--expect <expected.json>] [--drafts] [--max-note-id] [--ai-only] [--max-chars N] [--full]` — READ-ONLY post-publish verification (use it instead of ad-hoc inline scripts): pending-draft count (`--drafts`), highest note id on the MR (`--max-note-id`, the follow-up baseline), and `--expect` matching of posted bodies (the comments.json schema of `mr-draft-review.sh`; byte-exact FINAL bodies; anchored items also require `new_path`/`new_line` — or `old_path`/`old_line` — equality; reply items require the body inside the given discussion; `@file` bodies; `--ai-only` narrows to `AI generated:` notes); verdicts `ok`/`anchor-mismatch`/`body-mismatch`/`not-found` with discussion id, note id, anchor, and resolved flag; exit 1 when any expected item is not ok.
 
 When to prefer the tools: use them instead of hand-built glab calls for
 exactly these operations — update polling with a state marker, thread
 dumps, a single anchored comment, a batch review, a discussion reply, a
-single-thread resolve. Raw glab stays the path for everything else
+single-thread resolve, and read-only post-publish verification
+(pending-draft count, max note id, expected-body/anchor checks). Raw glab
+stays the path for everything else
 (MR/issue/CI operations, lists, descriptions, merges) and for
 understanding the underlying API semantics: the tools automate the
 protocols above, they do not replace the knowledge behind them.
