@@ -13,7 +13,9 @@
 #   --drafts        pending draft_notes of your user on the MR (count + ids;
 #                   the pre-existing-draft check before a batch run)
 #   --max-note-id   highest note id on the MR (marker/baseline for follow-up
-#                   posts, same basis as the mr-updates.sh --state marker)
+#                   posts, same basis as the mr-updates.sh --state marker);
+#                   fetched as ONE sort=desc page - the newest notes are on
+#                   page 1, and the max runs over every note of that page
 #   --expect FILE   verify that expected comment bodies are really posted.
 #                   FILE = the same JSON array schema as mr-draft-review.sh
 #                   comments.json:
@@ -157,7 +159,7 @@ if bad:
     print("\n".join(bad), file=sys.stderr)
     sys.exit(1)
 json.dump(clean, open(out, "w", encoding="utf-8"), ensure_ascii=False)
-open(atfile_out, "w").write("\n".join(atfiles) + ("\n" if atfiles else ""))
+open(atfile_out, "w", encoding="utf-8").write("\n".join(atfiles) + ("\n" if atfiles else ""))
 print(f"parsed {len(clean)} expected item(s) from {src}", file=sys.stderr)
 PY
 
@@ -198,7 +200,7 @@ if [ "$drafts" = 1 ]; then
   echo "== pending drafts (your user) =="
   python3 - "$GT_API_TMP/verify.drafts.jsonlines" <<'PY'
 import json, sys
-items = [json.loads(l) for l in open(sys.argv[1]) if l.strip()]
+items = [json.loads(l) for l in open(sys.argv[1], encoding="utf-8") if l.strip()]
 ids = ", ".join(str(d.get("id")) for d in items)
 print(f"count: {len(items)}")
 print(f"ids:   {ids or '(none)'}")
@@ -206,13 +208,16 @@ PY
 fi
 
 if [ "$max_note_id" = 1 ]; then
-  gt_get_all "$ep/notes?sort=desc&order_by=created_at" > "$GT_API_TMP/verify.notes.jsonlines"
+  # sort=desc puts the newest notes on page 1, so ONE page (per_page=100,
+  # no --paginate walk) suffices; the python side still maxes over every
+  # fetched note, so the within-page ordering never matters
+  gt_get "$ep/notes?sort=desc&order_by=created_at&per_page=100" > "$GT_API_TMP/verify.notes.jsonlines"
   echo "== max note id =="
   python3 - "$GT_API_TMP/verify.notes.jsonlines" "$ai_only" "$GT_PREFIX" <<'PY'
 import json, sys
 ai_only = sys.argv[2] == "1"
 prefix = sys.argv[3]
-items = [json.loads(l) for l in open(sys.argv[1]) if l.strip()]
+items = [json.loads(l) for l in open(sys.argv[1], encoding="utf-8") if l.strip()]
 if ai_only:
     items = [n for n in items if (n.get("body") or "").startswith(prefix)]
 if not items:
@@ -248,8 +253,8 @@ def preview(s):
     lines = s.splitlines() or [""]
     return trunc(lines[0])
 
-entries = [json.loads(l) for l in open(exp_path) if l.strip()]
-discs = [json.loads(l) for l in open(disc_path) if l.strip()]
+entries = [json.loads(l) for l in open(exp_path, encoding="utf-8") if l.strip()]
+discs = [json.loads(l) for l in open(disc_path, encoding="utf-8") if l.strip()]
 
 # candidate notes: non-system notes inside discussions (a standalone note
 # arrives as an individual discussion); --ai-only narrows to our prefix
@@ -349,15 +354,23 @@ for e in entries:
             report("ok", e, pair, note)
             continue
         disc_exists = any(d.get("id") == e["did"] for d in discs)
-        where = ("the discussion exists but the body is not inside it"
-                 if disc_exists else "the discussion itself was not found")
         if body_hits:
             pair = newest(body_hits)
+            where = ("the discussion exists but the body is not inside it"
+                     if disc_exists else "the discussion itself was not found")
             report("body-mismatch", e, pair,
                    f"exact body found OUTSIDE discussion {e['did']} (orphan reply?); {where}")
+        elif disc_exists:
+            # the expected place exists (the discussion) while the body is
+            # nowhere on the MR: body-mismatch, not not-found
+            in_disc_any = [dn for dn in cands if dn[0].get("id") == e["did"]]
+            pair = newest(in_disc_any) if in_disc_any else None
+            report("body-mismatch", e, pair,
+                   f"the discussion exists but the body is not inside it; "
+                   f"expected body: {preview(body)!r}")
         else:
             report("not-found", e, None,
-                   f"{where}; expected body: {preview(body)!r}")
+                   f"neither the body nor the discussion found; expected body: {preview(body)!r}")
         bad += 1
     else:  # unanchored: the body anywhere on the MR
         if body_hits:

@@ -285,8 +285,11 @@ use it instead of ad-hoc inline verification scripts). Three checks:
 - `--drafts` - the pending `draft_notes` of your user on the MR: count + ids
   (the pre-existing-draft check before a batch run).
 - `--max-note-id` - the highest note id on the MR (marker/baseline for
-  follow-up posts, same basis as the `mr-updates.sh --state` marker). With
-  `--ai-only` only notes starting with `AI generated: ` count.
+  follow-up posts, same basis as the `mr-updates.sh --state` marker).
+  Fetched as a single `sort=desc` page - the newest notes are on page 1 -
+  with the max taken over every note of that page, so the within-page
+  ordering never matters. With `--ai-only` only notes starting with
+  `AI generated: ` count.
 - `--expect <expected.json>` - verifies expected comment bodies against the
   discussions listing. The file uses the `mr-draft-review.sh`
   comments.json schema: `{"path":..., "line":N, "body":..., "old_side":
@@ -328,11 +331,13 @@ mr-verify-posted.sh ai/streamflow/flowruntime 1903 \
 ```
 
 A sample expectations file is in `examples/expect.example.json`; it pairs
-with `examples/comments.example.json`: the first and third batch items
-verify byte-exactly (the third via the `@file` body
-`examples/comments.example.body.txt`, byte-identical to the batch body),
-while the second (line 99999) posts unpositioned with `path:line`
-prepended and would have to be expected with that final body.
+with `examples/comments.example.json` — run mr-verify-posted.sh from
+`tools/` for that pairing: `@file` bodies resolve against the CWD, so the
+sample `@examples/comments.example.body.txt` only lines up from there.
+The first and third batch items verify byte-exactly (the third via that
+`@file` body, byte-identical to the batch body), while the second (line
+99999) posts unpositioned with `path:line` prepended and would have to be
+expected with that final body.
 
 ## Testing notes
 
