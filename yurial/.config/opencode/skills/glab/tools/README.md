@@ -341,11 +341,12 @@ sample `@examples/comments.example.body.txt` only lines up from there.
 The first and third batch items verify byte-exactly (the third via that
 `@file` body, byte-identical to the batch body), while the second (line
 99999) posts unpositioned with `path:line` prepended and would have to be
-expected with that final body. The reply item's discussion id is a
-masked-value placeholder (`1ba268fb6712127820af0b181b3f2633e110aef4`)
-captured from an API response - replace it with a real discussion id of
-the target MR for a live run. `comments.example.json` contains no reply
-item: the example pair covers the anchored and unanchored kinds only.
+expected with that final body. The reply item's discussion id is the
+placeholder `__SECRET_0__`: it mimics the masked form the API returns for
+40-hex ids on this instance (an API-captured value would itself be masked
+this way) and must be replaced with a real discussion id of the target MR
+for a live run. `comments.example.json` contains no reply item: the
+example pair covers the anchored and unanchored kinds only.
 
 ## Testing notes
 

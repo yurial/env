@@ -133,6 +133,9 @@ if not data:
     sys.exit(3)
 clean, bad, atfiles = [], [], []
 for i, c in enumerate(data):
+    if not isinstance(c, dict):
+        bad.append(f"  #{i}: not a JSON object")
+        continue
     body = c.get("body")
     did = c.get("reply_to_discussion_id")
     path = c.get("path")
@@ -159,7 +162,7 @@ for i, c in enumerate(data):
         if not isinstance(path, str) or not path:
             bad.append(f"  #{i}: missing/invalid 'path'")
             continue
-        if not isinstance(line, int) or line < 1:
+        if not isinstance(line, int) or isinstance(line, bool) or line < 1:
             bad.append(f"  #{i} ({path}): missing/invalid 'line'")
             continue
         entry.update(kind="anchored", path=path, line=line,
