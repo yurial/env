@@ -16,6 +16,8 @@
 #                   posts, same basis as the mr-updates.sh --state marker);
 #                   fetched as ONE sort=desc page - the newest notes are on
 #                   page 1, and the max runs over every note of that page
+#                   (diverging from a full-list max only if >100 notes
+#                   share one created_at)
 #   --expect FILE   verify that expected comment bodies are really posted.
 #                   FILE = the same JSON array schema as mr-draft-review.sh
 #                   comments.json:
@@ -44,13 +46,17 @@
 #                   outside its thread (the silent-orphan trap)
 #   not-found       neither the body nor the expected place found
 #
-# Exit codes: 0 all requested checks ok (or only informational flags given);
-# 1 an expected item is not ok; 2 usage error.
+# Exit codes: 0 all expected items ok (or informational runs); 1 failure
+# (mismatched expected item, unparsable input, HTTP error; unknown option /
+# bad flag value also die with 1); 2 usage error (missing arguments or
+# nothing to do).
 #
 # Traps handled: pagination (per_page=100 + --paginate), concatenated page
 # arrays parsed with repeated raw_decode, error detection without relying on
-# the glab exit code, thread resolved == every non-system note resolved
-# (no discussion-level flag on this instance).
+# the glab exit code. Resolved display: a verdict line shows the matched
+# note's own resolved flag only and never aggregates thread state (on this
+# instance a thread is resolved == every non-system note resolved, and there
+# is no discussion-level flag).
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=lib.sh
@@ -101,7 +107,8 @@ if [ -n "$proj" ] && [ -z "$iid" ] && [ -n "$GITLAB_DEFAULT_PROJECT" ]; then
 fi
 [ -n "$proj" ] && [ -n "$iid" ] || usage
 if [ -z "$input" ] && [ "$drafts" != 1 ] && [ "$max_note_id" != 1 ]; then
-  gt_die "nothing to do: pass --expect <file> and/or --drafts and/or --max-note-id"
+  echo "nothing to do: pass --expect <file> and/or --drafts and/or --max-note-id" >&2
+  usage
 fi
 [ -z "$input" ] || [ -f "$input" ] || gt_die "expected file not found: $input"
 
@@ -110,15 +117,20 @@ ep="projects/$enc/merge_requests/$iid"
 
 # ---- 1) parse + validate the expect file; resolve @file bodies -----------
 if [ -n "$input" ]; then
-  python3 - "$input" "$GT_API_TMP/exp.raw.json" "$GT_API_TMP/exp.atfile.args" <<'PY'
+  # exit 3 = "empty expected array, nothing to do" -> routed through usage()
+  exp_rc=0
+  python3 - "$input" "$GT_API_TMP/exp.raw.json" "$GT_API_TMP/exp.atfile.args" <<'PY' || exp_rc=$?
 import json, sys
 src, out, atfile_out = sys.argv[1:4]
 try:
     data = json.load(open(src, encoding="utf-8"))
 except Exception as e:
     sys.exit(f"cannot parse {src}: {e}")
-if not isinstance(data, list) or not data:
-    sys.exit(f"{src} must be a non-empty JSON array of expected-comment objects")
+if not isinstance(data, list):
+    sys.exit(f"{src} must be a JSON array of expected-comment objects")
+if not data:
+    print(f"{src}: the expected array is empty - nothing to do", file=sys.stderr)
+    sys.exit(3)
 clean, bad, atfiles = [], [], []
 for i, c in enumerate(data):
     body = c.get("body")
@@ -130,6 +142,9 @@ for i, c in enumerate(data):
         continue
     if body == "@-":
         bad.append(f"  #{i}: stdin bodies ('@-') are not supported in --expect files")
+        continue
+    if path is None and line is None and c.get("old_side") is not None:
+        bad.append(f"  #{i}: 'old_side' requires 'path'/'line' (this item has no anchor)")
         continue
     entry = {"idx": i, "body": body}
     if did is not None:
@@ -152,6 +167,9 @@ for i, c in enumerate(data):
     else:
         entry.update(kind="unanchored")
     if body.startswith("@"):
+        if not body[1:].strip():
+            bad.append(f"  #{i}: empty body file name after @")
+            continue
         atfiles.append(body)
     clean.append(entry)
 if bad:
@@ -162,6 +180,8 @@ json.dump(clean, open(out, "w", encoding="utf-8"), ensure_ascii=False)
 open(atfile_out, "w", encoding="utf-8").write("\n".join(atfiles) + ("\n" if atfiles else ""))
 print(f"parsed {len(clean)} expected item(s) from {src}", file=sys.stderr)
 PY
+  if [ "$exp_rc" -eq 3 ]; then usage; fi
+  if [ "$exp_rc" -ne 0 ]; then exit "$exp_rc"; fi
 
   # resolve @file bodies through gt_body_from_arg (the same @file helper as
   # mr-comment.sh / mr-reply.sh; dies when the body file is missing)
@@ -172,12 +192,19 @@ PY
     i=$((i + 1))
   done < "$GT_API_TMP/exp.atfile.args"
 
-  python3 - "$GT_API_TMP/exp.raw.json" "$GT_API_TMP/exp.body." "$i" "$GT_API_TMP/exp.jsonl" <<'PY'
+  python3 - "$GT_API_TMP/exp.raw.json" "$GT_API_TMP/exp.body." "$i" "$GT_API_TMP/exp.jsonl" "$GT_API_TMP/exp.atfile.args" <<'PY'
 import json, sys
 entries = json.load(open(sys.argv[1], encoding="utf-8"))
 prefix, n = sys.argv[2], int(sys.argv[3])
-files = [open(f"{prefix}{k}", encoding="utf-8").read() for k in range(n)]
 out = sys.argv[4]
+names = [l.rstrip("\n")[1:] for l in open(sys.argv[5], encoding="utf-8")] if n else []
+files = []
+for k in range(n):
+    name = names[k] if k < len(names) else f"{prefix}{k}"
+    try:
+        files.append(open(f"{prefix}{k}", encoding="utf-8").read())
+    except UnicodeDecodeError:
+        sys.exit(f"body file {name} is not valid UTF-8")
 k = 0
 with open(out, "w", encoding="utf-8") as f:
     for e in entries:
@@ -276,13 +303,13 @@ def anchor_of(n):
     if isinstance(lr, dict):
         s, e = lr.get("start") or {}, lr.get("end") or {}
         if s.get("new_line") and e.get("new_line"):
-            return f"{path}:{s['new_line']}-{e['new_line']} (new)"
+            return f"{path}:{s['new_line']}-{e['new_line']} (new side)"
         if s.get("old_line") and e.get("old_line"):
-            return f"{path}:{s['old_line']}-{e['old_line']} (old)"
+            return f"{path}:{s['old_line']}-{e['old_line']} (old side)"
     if p.get("new_line") is not None:
-        return f"{path}:{p['new_line']} (new)"
+        return f"{path}:{p['new_line']} (new side)"
     if p.get("old_line") is not None:
-        return f"{path}:{p['old_line']} (old)"
+        return f"{path}:{p['old_line']} (old side)"
     return f"{path}:? (position without a line)"
 
 def anchored(n, e):
@@ -301,7 +328,7 @@ def newest(pairs):
 
 def report(tag, e, pair, extra=""):
     if e["kind"] == "anchored":
-        want = f"{e['path']}:{e['line']} ({'old' if e['old_side'] else 'new'})"
+        want = f"{e['path']}:{e['line']} ({'old side' if e['old_side'] else 'new side'})"
     elif e["kind"] == "reply":
         want = f"reply into discussion {e['did']}"
     else:

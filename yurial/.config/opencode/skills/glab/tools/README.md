@@ -288,8 +288,9 @@ use it instead of ad-hoc inline verification scripts). Three checks:
   follow-up posts, same basis as the `mr-updates.sh --state` marker).
   Fetched as a single `sort=desc` page - the newest notes are on page 1 -
   with the max taken over every note of that page, so the within-page
-  ordering never matters. With `--ai-only` only notes starting with
-  `AI generated: ` count.
+  ordering never matters; this diverges from the mr-updates.sh full-list
+  basis only if more than 100 notes share one `created_at`. With
+  `--ai-only` only notes starting with `AI generated: ` count.
 - `--expect <expected.json>` - verifies expected comment bodies against the
   discussions listing. The file uses the `mr-draft-review.sh`
   comments.json schema: `{"path":..., "line":N, "body":..., "old_side":
@@ -317,11 +318,14 @@ note id, anchor, and resolved flag):
   landed outside its thread);
 - `not-found` - neither the body nor the expected place found.
 
-Exit codes: 1 when any expected item is not `ok`, 0 when only the
-informational flags were requested, 2 usage. Traps handled: pagination,
-concatenated page arrays, error detection by body/stderr (never the glab
-exit code), thread resolved == every non-system note resolved (no
-discussion-level flag on this instance).
+Exit codes: 0 all expected items `ok` (or informational-only runs); 1
+failure (a mismatched expected item, unparsable input, an HTTP error;
+unknown option / bad flag value also exit 1); 2 usage error (missing
+arguments or nothing to do, an empty expect array included). Traps
+handled: pagination, concatenated page arrays, error detection by
+body/stderr (never the glab exit code). The resolved flag in a verdict
+line is the matched note's own flag (resolvable notes); the script never
+aggregates thread state (no discussion-level flag on this instance).
 
 Example:
 
@@ -337,7 +341,11 @@ sample `@examples/comments.example.body.txt` only lines up from there.
 The first and third batch items verify byte-exactly (the third via that
 `@file` body, byte-identical to the batch body), while the second (line
 99999) posts unpositioned with `path:line` prepended and would have to be
-expected with that final body.
+expected with that final body. The reply item's discussion id is a
+masked-value placeholder (`1ba268fb6712127820af0b181b3f2633e110aef4`)
+captured from an API response - replace it with a real discussion id of
+the target MR for a live run. `comments.example.json` contains no reply
+item: the example pair covers the anchored and unanchored kinds only.
 
 ## Testing notes
 
