@@ -14,5 +14,6 @@ permission:
     assistant_low: allow
     assistant_high: allow
     assistant_max: allow
+    assistant_heavy: allow
 prompt: "{file:./rules/assistant.md}"
 ---
