@@ -8,6 +8,7 @@ permission:
   bash:
     "*": allow
     "sleep*": deny
+  todowrite: allow
   task:
     "*": deny
 prompt: "{file:./rules/assistant.md}"

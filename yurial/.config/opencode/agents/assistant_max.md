@@ -9,6 +9,7 @@ permission:
   bash:
     "*": allow
     "sleep*": deny
+  todowrite: allow
   task:
     "*": deny
     assistant_low: allow
