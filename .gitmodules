@@ -1,0 +1,3 @@
+[submodule "ssh-sc"]
+	path = ssh-sc
+	url = git@github.com:yurial/ssh-sc.git

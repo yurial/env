@@ -5,7 +5,8 @@
 ## Структура
 
 - `install.sh` — установщик. Копирует `$USER/` в `$HOME/` через `rsync`. Запускается без аргументов для текущего пользователя; `./install.sh <username>` ставит конфиги указанному пользователю (через `su -c ... -l`); `./install.sh all` обходит все поддиректории первого уровня кроме скрытых. При запуске создаёт (если ещё не существует) симлинк `.git/hooks/post-checkout`.
-- `post-checkout` — git-хук, на который указывает симлинк в `.git/hooks/`. После каждого `git checkout` запускает `install.sh`, чтобы `$HOME/` всегда соответствовал HEAD.
+- `post-checkout` — git-хук, на который указывает симлинк в `.git/hooks/`. После каждого `git checkout` подтягивает сабмодули (`git submodule update --init --recursive`) и запускает `install.sh`, чтобы `$HOME/` всегда соответствовал HEAD.
+- `ssh-sc/` — сабмодуль `github.com/yurial/ssh-sc` — ssh-обёртки для screen/tmux: `ssh-sc`/`ssc`, `ssh-tm`/`sst` (`ssc`, `sst` — симлинки на первые).
 - `yurial/` — dotfiles пользователя `yurial`:
   - shell: `.bashrc`, `.inputrc`, `.screenrc`, `.tmux.conf`, `.vimrc`
   - `.tmux.conf` — tmux 3.4 вместо серверного GNU screen 4.09.01: screen при переиздании OSC-титула усекает UTF-8 до младших байтов (кириллица → младшие байты, «Подсчёт» → ">4AGQB"). Префикс `C-x` зеркалирует screen `escape ^Xx` (`C-x x` шлёт литеральный C-x приложению); `default-terminal screen-256color` — под тему `yurial.json`; `set-titles` — титул наружу чистым UTF-8, `set-clipboard on` — OSC 52, `escape-time 10` — без задержки Esc, `focus-events on` — blur-уведомления opentui. Внешний screen на macOS остаётся (префикс `C-a` — слои разведены).
@@ -14,6 +15,7 @@
   - opencode: `.config/opencode/` (см. ниже)
   - systemd: `.config/systemd/user/opencode-server.service` — user-сервис `opencode serve` (порт 4096, только localhost; `systemctl --user status opencode-server`; перезапуск — alias `opencode-restart`; автостарт при загрузке — при включённом `loginctl enable-linger`)
   - `bin/ansi-table.sh` — печатает матрицу 16x16 сочетаний ANSI фон/текст (подбор пар для темы)
+  - `.local/bin/` — симлинки на скрипты сабмодуля `ssh-sc/`; rsync запускается с `--copy-unsafe-links`, поэтому ссылки, указывающие наружу `$SRCDIR`, разворачиваются в реальные файлы в `~/.local/bin`
 - `yurial/.config/opencode/themes/yurial.json` — кастомная тема TUI opencode (16 ANSI-цветов, уникальные контрастные пары фон/текст; выбор в `/themes`). Тема рассчитана на 256-цветной режим (`TERM=screen-256color`); alias `opencode` в `.bashrc` обходит баг opentui 0.4.5 (remote-детект по `SSH_*` отключает 256-цветность). Alias `opencode` подключает TUI к локальному серверу (`opencode attach http://127.0.0.1:4096`).
 - `iu.diachenko` — симлинк на `yurial/`: `./install.sh iu.diachenko` ставит те же конфиги одноимённому пользователю. В обход `install.sh all` не попадает (`find -type d` не следует по симлинкам).
 
@@ -24,6 +26,8 @@
 ./install.sh yurial    # поставить конфиги пользователю yurial
 ./install.sh all       # прокатить все поддиректории
 ```
+
+Клонируйте с `--recurse-submodules` (сабмодуль `ssh-sc/`); если сабмодуль не подтянут, хук `post-checkout` сам выполнит `git submodule update --init --recursive`. `./install.sh all` пропускает каталоги-репозитории (сабмодуль в обход не попадает). Скрипты из `.local/bin` попадают в `$HOME` копиями: после `git pull` внутри `ssh-sc/` перепрогоните `./install.sh`, иначе копии в `$HOME` останутся устаревшими (осознанный трейд-офф).
 
 ### Синхронизация установленной копии
 
