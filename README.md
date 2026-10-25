@@ -7,7 +7,8 @@
 - `install.sh` — установщик. Копирует `$USER/` в `$HOME/` через `rsync`. Запускается без аргументов для текущего пользователя; `./install.sh <username>` ставит конфиги указанному пользователю (через `su -c ... -l`); `./install.sh all` обходит все поддиректории первого уровня кроме скрытых. При запуске создаёт (если ещё не существует) симлинк `.git/hooks/post-checkout`.
 - `post-checkout` — git-хук, на который указывает симлинк в `.git/hooks/`. После каждого `git checkout` запускает `install.sh`, чтобы `$HOME/` всегда соответствовал HEAD.
 - `yurial/` — dotfiles пользователя `yurial`:
-  - shell: `.bashrc`, `.inputrc`, `.screenrc`, `.vimrc`
+  - shell: `.bashrc`, `.inputrc`, `.screenrc`, `.tmux.conf`, `.vimrc`
+  - `.tmux.conf` — tmux 3.4 вместо серверного GNU screen 4.09.01: screen при переиздании OSC-титула усекает UTF-8 до младших байтов (кириллица → младшие байты, «Подсчёт» → ">4AGQB"). Префикс `C-x` зеркалирует screen `escape ^Xx` (`C-x x` шлёт литеральный C-x приложению); `default-terminal screen-256color` — под тему `yurial.json`; `set-titles` — титул наружу чистым UTF-8, `set-clipboard on` — OSC 52, `escape-time 10` — без задержки Esc, `focus-events on` — blur-уведомления opentui. Внешний screen на macOS остаётся (префикс `C-a` — слои разведены).
   - vcs: `.gitconfig`, `.hgrc`
   - ssh: `.ssh/config`, `.ssh/rc`, `.ssh/authorized_keys`
   - opencode: `.config/opencode/` (см. ниже)
