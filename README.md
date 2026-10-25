@@ -9,7 +9,7 @@
 - `ssh-sc/` — сабмодуль `github.com/yurial/ssh-sc` — ssh-обёртки для screen/tmux: `ssh-sc`/`ssc`, `ssh-tm`/`sst` (`ssc`, `sst` — симлинки на первые).
 - `yurial/` — dotfiles пользователя `yurial`:
   - shell: `.bashrc`, `.inputrc`, `.screenrc`, `.tmux.conf`, `.vimrc`
-  - `.tmux.conf` — tmux 3.4 вместо серверного GNU screen 4.09.01: screen при переиздании OSC-титула усекает UTF-8 до младших байтов (кириллица → младшие байты, «Подсчёт» → ">4AGQB"). Префикс `C-x` зеркалирует screen `escape ^Xx` (`C-x x` шлёт литеральный C-x приложению); `default-terminal screen-256color` — под тему `yurial.json`; `set-titles` — титул наружу чистым UTF-8, `set-clipboard on` — OSC 52, `escape-time 10` — без задержки Esc, `focus-events on` — blur-уведомления opentui. Внешний screen на macOS остаётся (префикс `C-a` — слои разведены).
+  - `.tmux.conf` — tmux 3.4 вместо серверного GNU screen 4.09.01: screen при переиздании OSC-титула усекает UTF-8 до младших байтов (кириллица → младшие байты, «Подсчёт» → ">4AGQB"). Префикс `C-x` зеркалирует screen `escape ^Xx` (`C-x x` шлёт литеральный C-x приложению); `default-terminal screen-256color` — под тему `yurial.json`; `set-titles off` — внешний титул не трогаем, `allow-rename on` — вкладки следуют титулам приложений, `set-clipboard on` — OSC 52, `escape-time 10` — без задержки Esc, `focus-events on` — blur-уведомления opentui. Внешний screen на macOS остаётся (префикс `C-a` — слои разведены).
   - vcs: `.gitconfig`, `.hgrc`
   - ssh: `.ssh/config`, `.ssh/rc`, `.ssh/authorized_keys`
   - opencode: `.config/opencode/` (см. ниже)
