@@ -21,11 +21,11 @@ in `tools/` next to this file that implement the review workflows
 mechanically — including the read-only post-publish verifier
 `mr-verify-posted.sh` — and are the preferred path for their operations.
 Verified against glab 1.36.0; behavior marked instance-dependent was
-observed live on a self-managed GitLab 18.7.7-ee and is not guaranteed on
-other instances. On another glab version re-check flags with
-`glab <command> --help` before relying on them. Every identifier in the
-examples is a placeholder: `<group/project>`, `<username>`, `<iid>`,
-`<job-id>`.
+observed live on a self-managed GitLab (18.7.7-ee at first, 18.8.11-ee by
+2026-10) and is not guaranteed on other instances. On another glab version
+re-check flags with `glab <command> --help` before relying on them. Every
+identifier in the examples is a placeholder: `<group/project>`, `<username>`,
+`<iid>`, `<job-id>`.
 
 ## 1. Repository context
 
@@ -49,9 +49,10 @@ exit code 1 — that is a context error, not "the project has no MRs".
 
 `glab auth status` — check who you are logged in as and on which hosts; works
 from any directory. Before working with a new host, make sure it has a valid
-token (`✓ Logged in ... as <username>`); `x`/`!` lines in the output indicate
-a token problem (`x No token provided`, `! Invalid token provided`), and with
-one the API calls will return 401.
+token (`✓ Logged in ... as <username>`); `x`/`!` lines in the output
+(`x No token provided`, `! Invalid token provided`) are indicators of a token
+problem to check — not a verdict: they can coexist with a working token, so
+the token's health is decided by a live API call (section 15).
 
 - Non-interactive login: `glab auth login --hostname <host> --stdin` reads the
   token from standard input (minimum token scopes: `api`, `write_repository`).
@@ -111,6 +112,11 @@ glab api "merge_requests?reviewer_username=<username>&state=opened&scope=all"
 The output is a JSON array; parse it with jq or python. Useful fields of each
 MR: `iid`, `title`, `state`, `references.full` (full project path + iid),
 `web_url`, `work_in_progress`, `author`.
+
+The mechanical path for the global listing is the bundled `mr-list.sh`
+(section 22): it carries the mandatory `scope=all` (section 5), full
+pagination, and role/state/draft filters, so the traps below cannot be
+forgotten.
 
 ## 5. The scope=all trap (critical)
 
@@ -440,7 +446,8 @@ check whether the result was cut off by the page limit.
 status. Disambiguation:
 
 - `401 Unauthorized` — token problem for that host: missing, invalid, or
-  expired. Check `glab auth status` (section 2) and re-login.
+  expired. Check `glab auth status` (section 2) — a hint, not a verdict
+  (section 15) — and re-login.
 - `403 Forbidden` — the token is valid, but the account lacks permission for
   this action (e.g. admin-only endpoints, merging without access).
 - `404 Not Found` — most often a wrong project: the host/project were taken
@@ -450,17 +457,30 @@ status. Disambiguation:
 ## 15. Multi-host auth: `auth status` can mislead (trap)
 
 On a machine with several configured hosts, `glab auth status` prints a block
-per host. Two pitfalls observed in practice:
+per host. Three pitfalls observed in practice:
 
 - A `✓` on one host does not validate another: a per-host block may show
   `Token: ****` (a token is stored) together with `! Invalid token provided`
-  — the stored token is stale/expired. An API call against that host then
-  returns 401 even though `auth status` "shows a token".
+  — the stored token may be stale/expired, and an API call against that host
+  then returns 401 even though `auth status` "shows a token".
 - `glab auth status` without `--hostname` may check a different host than the
   one your API calls use. Always pass `--hostname <host>` when diagnosing a
   specific host: `glab auth status --hostname <host>`.
+- Instance-dependent (observed 2026-10-26 on GitLab 18.8.11-ee): within ONE
+  host block the lines `✓ Logged in to <host> as <username>` and `! Invalid
+  token provided` may coexist while the token is in fact working — the very
+  next live API call against that host returned 200. The `✓ Logged in ...
+  as <username>` line is itself derived from a successful `/user` call, so
+  it already proves the token usable; the `!` line alone is not a verdict.
 
-Recovery: re-login `glab auth login --hostname <host> --stdin`, or supply a
+Rule: `auth status` output is a hint to check, never a verdict. The health
+of a token is decided only by a live API call — a cheap one suffices:
+`glab api user --hostname <host>` (200 — the token works, ignore the `!`
+line; 401 — the token is broken). Re-login is performed only after a real
+401 from a live call (section 14), never on an `!` line alone.
+
+Recovery: first a live probe — `glab api user --hostname <host>`; only on a
+real 401 re-login `glab auth login --hostname <host> --stdin`, or supply a
 fresh token via `GITLAB_TOKEN` (section 2). `glab api` still returns 401 with
 exit code 0 (section 3/13).
 
@@ -629,15 +649,16 @@ explicitly in non-interactive runs (section 3).
 
 The skill ships a bash+python3 toolkit in `tools/` next to this SKILL.md.
 The scripts wrap `glab api` and mechanically enforce the protocols and
-traps of sections 10, 11, 17, 18, and 19 — local anchor validation, the
-`AI generated:` prefix, verification by follow-up GET, the GraphQL reply
-fallback, pagination. Full contracts (arguments, exit codes, guards,
-stdout sections) are documented in `tools/README.md`; the gitlab-tools
-topic of SPEC.md is normative for this section. Exit codes: 0 success,
-1 failure, 2 usage error; output is plain text.
+traps of sections 5, 10, 11, 17, 18, and 19 — the scope=all rule, local
+anchor validation, the `AI generated:` prefix, verification by follow-up
+GET, the GraphQL reply fallback, pagination. Full contracts (arguments,
+exit codes, guards, stdout sections) are documented in `tools/README.md`;
+the gitlab-tools topic of SPEC.md is normative for this section. Exit codes:
+0 success, 1 failure, 2 usage error; output is plain text.
 
 One line per script:
 
+- `mr-list.sh [--role reviewer|author|assignee] [--state opened|closed|merged|all] [--draft|--no-draft] [--json] [--project <group/proj>] [--max N]` — global MR list by role for the current user across all accessible projects (default `--role reviewer --state opened`, the "what awaits my review" scenario); the mandatory `scope=all` (section 5) and full pagination are built in; one block per MR (`references.full`, DRAFT mark, title, author, updated_at date, web_url), newest update first; `--json` prints the normalized array; GET-only, an empty result is a success.
 - `mr-updates.sh <project> <iid> [--since <iso8601|sha>] [--state <file>] [--fetch]` — MR state, new commits (diffstat inside a clone), new notes, and thread status changes; with `--state` only the delta since the marker (additive schema, a masked sha is never stored as a cutoff).
 - `mr-threads.sh <project> <iid> [--open|--all] [--ai-only] [--max-chars N] [--full]` — readable thread dump: discussion id, resolved state, anchor, authors, bodies; GET-only.
 - `mr-comment.sh <project> <iid> <path> <line> <body-or-@file> [--old-side] [--no-prefix] [--force] [--dry-run] [--repo <dir>]` — one line-anchored comment: sha recovery, local hunk validation (refuses outside hunks with the valid ranges; `--force` posts unpositioned with `path:line` prepended), POST verified by GET.
@@ -648,12 +669,13 @@ One line per script:
 - `mr-verify-posted.sh <project> <iid> [--expect <expected.json>] [--drafts] [--max-note-id] [--ai-only] [--max-chars N] [--full]` — READ-ONLY post-publish verification (use it instead of ad-hoc inline scripts): pending-draft count (`--drafts`), highest note id on the MR (`--max-note-id`, the follow-up baseline), and `--expect` matching of posted bodies (the comments.json schema of `mr-draft-review.sh`; byte-exact FINAL bodies; anchored items also require `new_path`/`new_line` — or `old_path`/`old_line` — equality; reply items require the body inside the given discussion; `@file` bodies; `--ai-only` narrows to `AI generated:` notes); verdicts `ok`/`anchor-mismatch`/`body-mismatch`/`not-found` with discussion id, note id, anchor, and resolved flag; exit 1 when any expected item is not ok, 2 usage error.
 
 When to prefer the tools: use them instead of hand-built glab calls for
-exactly these operations — update polling with a state marker, thread
+exactly these operations — a global role-based MR listing (reviewer/author/
+assignee across all projects), update polling with a state marker, thread
 dumps, a single anchored comment, a batch review, a discussion reply, a
 single-thread resolve, and read-only post-publish verification
 (pending-draft count, max note id, expected-body/anchor checks). Raw glab
 stays the path for everything else
-(MR/issue/CI operations, lists, descriptions, merges) and for
+(MR/issue/CI operations, project-scoped lists, descriptions, merges) and for
 understanding the underlying API semantics: the tools automate the
 protocols above, they do not replace the knowledge behind them.
 

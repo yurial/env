@@ -91,6 +91,47 @@ config loading, API wrapper + error detection, concatenated-JSON parsing,
 pagination, sha recovery, hunk range building/summarization, GraphQL call
 helper, prefix check, `@file` body loading.
 
+## mr-list.sh
+
+```
+mr-list.sh [--role reviewer|author|assignee] [--state opened|closed|merged|all]
+           [--draft|--no-draft] [--json] [--project <group/proj>] [--max N]
+```
+
+Global MR listing by role — the "which MRs await my review" scenario (the
+default `--role reviewer --state opened`). Queries the global
+`merge_requests` endpoint for the CURRENT user (the username comes from a
+live `glab api user` call) with the mandatory `scope=all`: without it the
+endpoint silently defaults to `created_by_me` and returns only the caller's
+own MRs (SKILL.md section 5) — the tool encapsulates that trap.
+Pagination: `per_page=100` + `--paginate` via `lib.sh`.
+
+- text output: one block per MR — `references.full` and a `[DRAFT]` mark,
+  `updated_at` date, `author.username` on the header line, then `title` and
+  `web_url`; sorted by `updated_at` descending; a trailing count line
+  summarizes the query;
+- `--draft` / `--no-draft` filter drafts (`work_in_progress` or a
+  `Draft:`/`WIP:` title prefix);
+- `--project <group/proj>` narrows to one project (exact match on the
+  project path of `references.full` — the global endpoint returns no
+  `project` object; default: all accessible projects);
+- `--max N` caps the list after sorting (newest updates first);
+- `--json` prints the same normalized set as a JSON array, sorted
+  identically, deduplicated by MR id (the count line goes to stderr).
+
+GET-only: no writes, no clone needed. Exit codes: 0 success (an empty
+result is a success printed as an informational line), 1 failure (API
+error, unparsable response), 2 usage error (bad `--role`/`--state`/`--max`
+value, unknown option).
+
+Example:
+
+```
+mr-list.sh                            # open MRs awaiting my review, all projects
+mr-list.sh --role author --json       # my own MRs as a JSON array
+mr-list.sh --state all --project ai/streamflow/flowruntime --max 20
+```
+
 ## mr-updates.sh
 
 ```
