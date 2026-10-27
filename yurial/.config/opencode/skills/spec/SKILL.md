@@ -1,879 +1,235 @@
 ---
 name: spec
-description: Use when writing, updating, or reviewing project specifications (SPEC.md, specs/<component>.md, specs/index.md, specs/GLOSSARY.md, or colocated <library>/<component>/SPEC.md), when the user requests any change to functionality, behavior, or constraints (spec-first flow: spec before code), when checking related specs for collisions, or when implementing code against an existing spec. Use ONLY for specification documents and spec-driven changes, not for READMEs or general docs, not for TLA+ specs, TLC models, or proofs (see tla-plus, tlc-run, tlaps skills).
+description: Create, review, and maintain project specifications; enforce spec-first behavior changes; align related contracts; and verify implementation against approved requirements.
 ---
 
-# Project specifications: authoring, layout, change flow
-
-A specification fixes how algorithms, functions, components, and systems behave:
-their interfaces, semantics, constraints, and error handling. The spec is the
-source of truth: implementation code follows the spec and never contradicts it.
-Behavior found in code but absent from the spec is either a spec gap (fix the spec)
-or a bug (fix the code) — never silently tolerated.
-
-## 1. Core rules (non-negotiable)
-
-- **Spec-first change flow.** A request to change functionality is a request to
-   change the spec first. Order: locate the governing spec → update it → check
-   related specs for collisions (section `5`) → only then implement. Commits that
-   change behavior must touch the spec in the same change (or reference the spec
-   section that already prescribes it).
-- **No contradictions.** Code may not diverge from its spec. If implementation
-   constraints force a deviation, stop and surface the conflict to the user:
-   changing the spec is a decision, not a side effect of coding.
-- **One canonical spec per component.** Never keep two specs of the same thing;
-   link from auxiliary documents to the canonical spec.
-- **Index is always current.** In any project that has an index per section `2`,
-   every create/update/move/delete of a spec file updates `specs/index.md` in the
-   same commit.
-- **Conflicts between specs stop the work.** If a spec change contradicts another
-   spec and the resolution is not obvious, report both statements to the user and
-   pause; do not pick a winner silently.
-
-## 1b. Workflow for spec authoring (when using the spec skill)
-
-When authoring or updating a specification with the `spec` skill, follow this
-two-step agent delegation workflow:
-
-- **Research with assistant_low.** Use the `assistant_low` researcher agent
-    to read the relevant specs, sources, and documentation.
-    The agent should save references to useful documents with exact line ranges
-   in a temporary draft file (e.g. `specs/draft.md` or a working copy in the
-   project root). The draft should contain:
-   - Links to source files or URLs with line number ranges
-   - Brief summaries of each document's relevance
-   - Noted conflicts or ambiguities between documents
-   - Gaps in documentation that need to be addressed in the new spec
-
-   The draft file is created locally for the author to review; it is NOT part
-   of the final commit and is not committed to the repository until explicitly
-   approved.
-
-- **Generate with assistant_heavy.** Once the research draft is ready, use the
-     `assistant_heavy` agent to author or update the specification according
-     to the templates and writing rules in sections `3`-`4`. The draft file
-    serves as the source of truth for
-   references and gaps; the spec generation should cite specific requirement
-   IDs, maintain bidirectional links (Dependencies/Used-by), and follow the
-   layout and format rules.
-
-- **Cleanup.** After the spec is generated and all checks (section `5`) are
-   passed, remove or move the draft file out of the repository root and
-   archive it (e.g. under a `specs/drafts/` directory with a timestamp or under
-   `.gitignore`). The draft is not part of the final specification and should
-   not be committed unless explicitly included as documentation of the authoring
-   process (which is allowed only when the draft contains significant
-   methodology or rationale that is valuable for future reference).
-
-This workflow ensures that the authoring process leverages the research
-capabilities of assistant_low (read-only) before moving to the
-high-effort spec writing with assistant_heavy, keeping the draft ephemeral
-and easily deletable.
-
-## 2. Layout by project size
-
-| Project | Spec location | Index |
-|---|---|---|
-| Small (single component) | `SPEC.md` in the repo root | none |
-| Larger (several components/features) | `specs/<component-or-feature>.md` | `specs/index.md` |
-| Multi-library monorepos | colocated `<library>/<component>/SPEC.md` — allowed, but MUST be indexed in `specs/index.md` | `specs/index.md` |
-
-The specs/ tree of any multi-component project carries two cross-cutting
-files: `specs/index.md` (section `3`) and `specs/GLOSSARY.md` (section `3a`) —
-both maintained in the same commits as the specs they describe.
-
-Rules:
-- Growing past "small": when a second component boundary appears or root SPEC.md
-  exceeds ~`300` lines, split into `specs/` with an index; the root SPEC.md content
-  moves to `specs/<component>.md` files (do not keep duplicated content — a
-  one-line pointer stub at the old path is allowed if the path is widely
-  referenced).
-- Colocation threshold: allowed once the repo hosts multiple independently
-  versioned libraries (their components live far from a central specs/ tree);
-  a single-library repo keeps everything under specs/.
-- In mixed layouts (some colocated, some centralized) the index is the single
-  discovery point: it must list every spec regardless of where the file lives.
-- Never index a path that does not exist, and never leave an existing spec
-  unindexed (colocated specs are the classic leak — audit them explicitly).
-
-## 3. specs/index.md format
-
-```markdown
-# Specification Index
-
-| Path | Reference | Status | Summary |
-|---|---|---|---|
-| specs/auth.md | auth | stable | Token issuance, refresh, validation |
-| specs/queue.md | queue | draft | Persistent queue delivery guarantees |
-| lib/storage/SPEC.md | lib-storage | stable | Disk layout and compaction contract |
-```
-
-- `Status`: `draft` (being designed; may change freely — code may follow it
-  provisionally, but deviations are not yet bugs) | `stable` (implemented,
-  binding — code/spec divergence is a finding).
-- No `deprecated` status: superseded specs (or their obsolete parts) are
-  DELETED or rewritten in place under the new requirements — never kept for
-  reference. The index row is removed in the same commit; if a successor spec
-  exists, the old path is not kept as a stub. History lives in git, not in
-  living spec files.
-- `Summary`: one line, nouns only — what is fixed, not how.
-- `Reference` is the stable ID other specs cite instead of file paths (section
-   `4` writing rules) and the mandatory prefix of every term ID (section `3a`). It
-   must include the component or library name and may be composite
-   (`library-component`, e.g. `yt-core-bus`); use the composite form whenever
-   the bare component name is ambiguous across libraries. Reference IDs are
-   unique, stable, and strictly English — lowercase ASCII letters and digits
-   separated by single hyphens; any non-ASCII letter (Cyrillic or any other
-   alphabet) or uppercase letter is a violation, and the whitelist admits no
-   other punctuation (underscore, dot). Renaming one means updating the index,
-   every referencing spec's Dependencies, and every term ID carrying the
-   prefix (GLOSSARY.md and spec texts) in the same commit.
-- Optional extra columns (owner, last-updated) are fine if the team maintains
-  them; a stale extra column is worse than no column.
-
-## 3a. specs/GLOSSARY.md format
-
-```markdown
-# Specification Glossary
-
-| Term | Definition | Defined in |
-|---|---|---|
-| auth/token | Opaque credential authenticating a request | auth (R2) |
-| queue/ack | Positive delivery confirmation from a consumer | queue |
-| queue/lease | Exclusive time-bounded ownership of a message | queue |
-```
-
-- Every term is a full ID `<reference>/<term>` (e.g. `yt-core-bus/connection`),
-  strictly English, at every occurrence — glossary, Definitions sections,
-  requirement text. The prefix must equal an existing reference from
-  specs/index.md; the bare short form (`connection`) is never used.
-  Strictly English is mechanical: both parts of the ID (reference prefix
-  and term) are lowercase ASCII letters, digits, and hyphens; any
-  non-ASCII letter (Cyrillic or any other alphabet) or uppercase letter
-  in either part is a violation at every occurrence, and mixed-alphabet
-  term IDs (`очередь/lease`, `queue/очередь`) are forbidden. The lint
-  enforces this on GLOSSARY.md rows; in spec texts it is a semantic-pass
-  and review check. The Definition text and the glossary prose follow
-  the project's spec language (section `4`).
-- Alphabetical order by full term ID, always — a glossary is looked up, not
-  read.
-- One row per term ID. `Defined in` cites the owning reference — which must
-  equal the term's prefix — optionally with requirement IDs; never a file path.
-- The glossary is the canonical place where "which spec owns which term" is
-  visible; a term introduced by a spec (its Definitions section) gets a row in
-  the same commit. Terms reused from another spec (writing rules, section `4`)
-  do not get a second definition — their row keeps pointing at the owning spec.
-- One meaning per term ID across the project. The prefix keeps references
-  from colliding: `queue/lease` and `auth/lease` are distinct terms and may
-  coexist. Within one reference a term ID is defined once; if two references
-  define the same short name for the same concept, reuse the owner's full ID
-  instead of duplicating it (shared-vocabulary check, section `5`).
-- Updated together with the index: spec create/delete/rename updates both files
-  in the same commit. A glossary row citing a deleted reference — or a term
-  prefix that no longer resolves — is a dangling reference; resolve or remove
-  it immediately.
-- Small single-SPEC.md projects: a short Definitions section inside SPEC.md
-  suffices, using the same full-ID form (the reference is the component name
-  declared in the spec header); introduce GLOSSARY.md when the specs/ tree
-  appears.
-
-## 4. Spec file template
-
-```markdown
-# <Component> Specification
-
-Status: stable | draft
-Spec source of truth for: <component / feature name>
-
-## Overview
-What this component does and why it exists. The place for system-level
-purpose and explanations; may cite requirement IDs. Requirement lines
-never carry explanations (Requirements rules below); per-requirement examples
-and explanations live in Examples (Ex.y entries), per-decision rationale
-in Justification (J entries).
-
-## Scope
-In: <explicit list of responsibilities>.
-Out (non-goals): <what this component deliberately does not do>.
-
-## Definitions
-Terms used with precise meaning, each a full ID `<reference>/<term>` (e.g.
-yt-core-bus/connection); English only — lowercase ASCII letters, digits, and
-hyphens in both parts.
-
-## Interface
-Signatures, endpoints, CLI verbs, message schemas, config keys — the
-externally observable contract. Every element named and typed. The
-argument contract lives here: allowed values of every method argument
-(input) and allowed values of every result (output), error codes
-included — the complete error-code set is declared here as allowed
-result values. Config-key names and types live here; allowed values and
-effect live in Configuration. Error handling carries the semantics of
-the error codes, never their enumeration.
-
-## Configuration
-Mandatory when the component has configurable parameters, named
-constants, or magic numbers (writing rule below); omit the section only
-if it has none of the three. One row per entry — allowed values and
-effect. Three kinds of rows, always distinguishable, every row keyed by
-a name, never by a value: a parameter (keyed by config key;
-type/bounds/enum/step, default, effect); a named constant — a value
-baked into the code under an identifier (`MAX_RETRIES`) — keyed by that
-identifier, its single value with units marked `fixed`, no default; and
-a magic number — a bare literal in the code with no identifier (`3`,
-`60000`) — keyed by a semantic name chosen in the spec, lowercase
-hyphenated like a reference ID (e.g. `batch-timeout-cap`); the name
-exists in the spec only, never in the code — the row's value notes that
-the code carries a nameless literal, which is what distinguishes `magic`
-from `fixed` — and its single value with units is marked `magic`, no
-default:
-
-| Name | Allowed values | Default | Effect |
-|---|---|---|---|
-| `batch_timeout` | integer, 0..60000 ms, step 100 | 100 ms | Coalescing window (R4); at 0 coalescing is disabled; above 10000 ms the window fills only when `max_batch_size` >= 2 |
-| `mode` | enum: strict, lenient | strict | `strict` rejects unknown keys (R7); `lenient` logs and skips them |
-| `MAX_RETRIES` | `fixed` 3 attempts | — | Delivery retries before dead-lettering (R3) |
-| `batch-timeout-cap` | `magic` 60000 ms (nameless literal in the code) | — | Upper bound of `batch_timeout`; values above it are rejected as out of range (R4) |
-
-## Requirements
-Sequencing rules, ordering guarantees, algorithm semantics (steps or
-invariants, not code) — written as numbered requirements. Each requirement
-has a stable ID — flat (R1) or multi-level (R2.1, R4.2.1). Every leaf
-requirement is testable. An ID with children is a group, not a requirement:
-its line is a caption ending with a colon, states no behavior, and names
-what its children govern. Every requirement occupies exactly one line of
-the spec file. The requirements form a flat list: every entry line
-starts at the left margin, and a child (R2.1) is never indented under
-its parent (R2) — the multi-level ID alone expresses the hierarchy,
-never markdown nesting. Every requirement is written in declarative
-sentences; a
-line may carry more than one sentence, each without joined independent
-clauses and with at most one subordinate condition or time clause. A
-requirement line declares the rule only — no explanations or rationale
-inside it; those live in Overview, Examples, and Justification. Every
-requirement line states exactly one behavior feature, uses common
-language and generally accepted terms —
-local terms only with their interpretation fixed in Definitions and
-recorded in GLOSSARY.md — and is unambiguous to the reader:
-- R1. `put(k, v)` with an existing key atomically replaces the old value.
-- R2. Key expiry:
-- R2.1. A key expires after TTL seconds.
-- R2.2. Key expiry counts from the last write to that key.
-- R3. A read of an expired key returns NOT_FOUND.
-Citations use IDs and ID ranges (R3-R7). A citation covers the cited ID
-together with its whole subtree; a range covers every ID from its first
-endpoint to its last, subtrees included.
-
-## Implementation
-Optional; present when the internal rules of the realization are worth
-fixing. Implementation is the internal counterpart of Requirements:
-Requirements fixes hard behavior rules — the contract observed by
-external users of the component — while Implementation fixes
-implementation rules: changing them without changing Requirements does
-not change the behavior observed from outside. An entry fixes one
-internal rule — structure, algorithms, invariants not observable from
-outside — with a stable ID, flat (I1) or multi-level (I2.1), under the
-same ID syntax and line rules as R-IDs: unique per family, never
-renumbered, one entry per line, flat list, a group line ending with a
-colon, a leaf line with a period:
-- I1. The expiry wheel buckets timers by whole seconds.
-- I2. Timer wheel:
-- I2.1. A timer slot holds a list of pending entries.
-
-## Examples
-Optional; present when any requirement needs an illustration or
-explanation. One entry per explained requirement, the E-ID mirroring the
-R-ID: E3 explains R3; E2 explains the R2 group with its subtree. An entry
-holds concrete input→output examples and explanations, no new
-requirements, and occupies exactly one line:
-- E3. `get("k")` on a key expired one second ago returns NOT_FOUND.
-- E2. R2 subtree: `put("k", v)` at t0; `get("k")` at t0+TTL+1 s returns NOT_FOUND; a write at t1 restarts the expiry clock (R2.2).
-
-## Tests
-Optional; present when requirements are covered by recorded tests. One
-entry per test — a stable ID, flat (T1) or multi-level (T1.1), same ID
-syntax rules as R-IDs (unique, never renumbered, multi-level; not the
-R trailing-punctuation rule — it applies to R and I entries only); an
-ID with children is a group caption ending with a colon; a leaf entry
-cites the requirement IDs it covers — or, for a test checking an
-internal rule, implementation I-IDs — and every cited R-ID names an
-existing requirement, every cited I-ID an existing implementation
-entry. One entry occupies exactly one line, however long:
-- T1. Key expiry:
-- T1.1. get-expired-key returns NOT_FOUND (R3)
-- T1.2. last-write restarts the expiry clock (R2.2)
-
-## Usage constraints
-Constraints on the application of the component — externally imposed
-budgets (capacity, latency), applicability bounds, compatibility
-(versions, formats), security requirements, environment assumptions.
-Internal limits and behavior do not live here: behavior belongs in
-Requirements, self-enforced baked-in limits in Configuration.
-
-## Justification
-Optional; present when the rationale behind chosen defaults, algorithm
-details, or formulas exists and matters; absent otherwise. One entry per
-justified decision, a stable ID — flat (J1) or multi-level (J2.1), same
-ID syntax rules as R-IDs (unique, never renumbered, multi-level). An
-entry is prose citing the requirement or configuration IDs it justifies
-and occupies exactly one line:
-- J1. Why `batch_timeout` defaults to `100` ms: the coalescing window of R4 must cover the median RPC burst (~`60` ms) yet close within the `150` ms latency budget.
-
-## Error handling
-Semantics of the error codes enumerated in Interface: classes, retry
-semantics, partial-failure behavior. Never enumerates the codes — their
-complete set is an Interface result-value declaration.
-
-## Dependencies
-Specs whose terms, interfaces, or constraints this spec uses or constrains
-(semantic links — see writing rules). Cite by reference ID from the index,
-optionally citing specific requirement IDs:
-- auth (R2, R5) — auth/token format reused in message authentication
-- queue — queue/lease term adopted in Definitions
-
-## Used by
-The reverse side of Dependencies, maintained in the referenced specs: every
-spec listed above must list this reference in its own Dependencies (with the
-same meaning stated from its side). Populated by the referencing spec's
-change, same commit:
-- lib-storage (R4) — validates message authenticity via this spec's
-  auth/token format
-
-## Verification
-One entry per verified algorithm, each with a stable ID — flat (V1) or
-multi-level (V2.1), same ID syntax rules as R-IDs (unique, never
-renumbered, multi-level), a citation covering the ID with its whole
-subtree. A spec may describe
-several algorithms — always name the exact one. Recorded when the
-algorithm is checked with TLC/TLAPS; see the tla-plus / tlaps skills for
-run rules. One entry occupies exactly one line, however long; fields are
-separated by semicolons:
-- V1. Algorithm: lease-based leader election (R3-R7); Tool: TLC 1.8.0, model TLA/consensus.tla + tlc.cfg (Nodes = `3`, MaxTerm = `2`); Level: L1 protocol — message loss/duplication and crash/recover modeled, node internals abstracted as atomic phases; Checked: safety Inv1 (at most one leader), deadlock-freedom, liveness elected ~> leading under weak per-node fairness; Not checked: Nodes > `3`, Byzantine faults (crash only), no TLAPS proof
-```
-
-Writing rules — a format rule lives in three coordinated places: the
-template above, this list, and the anti-patterns (section `8`); a change to
-any format rule updates all three places in the same commit:
-- **Cross-spec references use reference IDs, never file paths.** The only
-  valid way to cite another spec is its `Reference` value from specs/index.md
-  (e.g. `auth`, `yt-core-bus`) — paths break when files move between root
-  SPEC.md, specs/, and colocated layouts; reference IDs are the stable IDs.
-  This rule holds everywhere: Dependencies sections, Definitions, requirement
-  bodies.
-- **Terms are full IDs, strictly English.** Every term is written as
-  `<reference>/<term>` (e.g. `yt-core-bus/connection`) at every occurrence —
-  Definitions, requirement bodies, constraints, GLOSSARY.md; the short form is
-  never used. Strictly English is mechanical: both parts of the ID are
-  lowercase ASCII letters, digits, and hyphens; any non-ASCII letter or
-  uppercase letter in either part is a violation at every occurrence, and
-  mixed-alphabet IDs (`очередь/lease`, `queue/очередь`) are forbidden. Term
-  IDs are English whatever the spec's language is (language
-  rule below). The prefix must resolve to an existing reference (from
-  specs/index.md, or the component name declared in the spec header in small
-  projects without an index).
-- **Reusing terms from another spec is allowed** and preferred over
-  redefining: use the owner's full ID verbatim (e.g. `queue/lease` — the
-  prefix records the origin; never strip or rewire it) and make sure the
-  source spec is listed in Dependencies.
-- **Links are semantic, bidirectional, and exact.** A Dependencies entry
-  exists only while this spec actually uses the other's terms, interfaces, or
-  constraints in its normative content (requirements, definitions, interface)
-  — not for historical or "related" mentions. Every link has two ends,
-  written the same commit: A's `Dependencies` names B, and B's `Used by`
-  names A. When the semantic use disappears (requirement dropped or
-  rewritten, term replaced), the link is removed from BOTH sides in the same
-  commit — never leave one-sided or stale "just in case" links.
-- **Statements are declarative and testable, one behavior feature per line.**
-  Requirements are written in declarative language ("must", "never",
-  "exactly once"): each states what the component does — never a narrative of
-  how the code does it. Each line (numbered requirement) describes exactly
-  ONE behavior feature: no compound statements bundling several behaviors —
-  split them into separate requirements. A requirement line may carry more
-  than one sentence. Every sentence is declarative; compound sentences —
-  independent clauses joined into one — are forbidden: split them into
-  separate sentences (into separate requirements when they state separate
-  behavior features). At most one subordinate clause per sentence is
-  allowed, and only a condition or time clause ("when the lease expires,
-   the message is redelivered"). A prefixed entry — a requirement
-   (R), an Implementation entry (I), an Examples entry (E), a Verification
-   entry (V), a Tests entry (T), a Justification entry (J) — occupies
-   exactly one line of the spec file:
-  wrapping it onto several lines is forbidden, however long the line
-  grows. Prefixed entries form a flat list: every entry line starts at
-  the left margin, indentation before an entry is forbidden, and a
-  child entry (R2.1) is never nested under its parent (R2) — the
-  multi-level ID alone expresses the hierarchy, never markdown
-  nesting. A requirement line declares only — rationale, motivation,
-  explanations, and examples never appear inside it; Overview carries the
-  system-level purpose, the Examples section carries per-requirement
-  examples and explanations, the Justification section carries
-  per-decision rationale (template above). Vocabulary is common language with
-  generally accepted terms and keywords; local (project-specific) terms are
-  part of it only when their interpretation is defined in the spec's
-  Definitions section and recorded in GLOSSARY.md (full-ID rule above).
-  Every line must be unambiguous: a reader must not need to guess what is
-  meant. If a requirement cannot be falsified by a test, it is a note, not
-  a requirement.
-- Stable IDs (R1, R2.1, R4.2.1, ...) are referenced by code comments, tests,
-  and commits; never renumber — retire IDs (drop the statement, note the
-  retirement in DEVIATIONS.md) instead. The same scheme governs the other
-  prefixed entry families — Implementation (Ix.y), Examples (Ex.y),
-  Verification (Vx.y), Tests (Tx.y), Justification (Jx.y): IDs unique per
-  family, never renumbered, multi-level allowed (Rx.y.z, any depth; every
-  ID at every level unique, with the no-renumbering and retirement rules
-  applying to every level equally). What the families share is this ID
-  syntax only — the trailing-punctuation rule (a leaf line ends with a
-  period, a group line with a colon) applies to R and I entries alone.
-  An ID with children is
-  a group, not a requirement: its line is a caption ending with a colon and
-  states no behavior. A citation of an ID covers it together with its whole
-  subtree; an ID range (R3-R7) covers every ID between its endpoints,
-  subtrees included.
-- Include concrete input→output examples for every nontrivial rule. A
-  requirement line carries no example and no explanation; examples and
-  per-requirement explanations live in the Examples section as Ex.y entries
-  mirroring the requirement IDs they explain (E2.1 explains R2.1; E2 covers
-  the R2 subtree).
-- Record algorithms as behavior (steps, invariants, complexity bounds), not as
-  implementation (no source files, class names, or private helpers).
-- **The input/output argument contract lives in Interface.** For every
-  method, endpoint, CLI verb, or message schema, the Interface section
-  declares the allowed values of each argument and the allowed values of
-  the result. Error codes are allowed result values: the complete set is
-  enumerated in Interface; Error handling states their semantics (classes,
-  retries, partial failures) and never re-enumerates them. Configurable
-  parameters are the exception: their allowed values and effect live in
-  Configuration (rule below); Interface carries only the config-key names
-  and types.
-- **Configuration section is mandatory when configurable parameters,
-  named constants, or magic numbers exist** (template section above).
-  Whenever the component exposes at least one configurable parameter —
-  config key, flag, env var, tuning knob, whatever the delivery
-  mechanism — or bakes a fixed value into its behavior (timeout, limit,
-  threshold, buffer size, retry count, and the like — fixed in code,
-  not tunable at runtime), the spec has a Configuration section with
-  one entry per parameter or fixed value; a spec without the section
-  asserts the component has none of them — no parameters, no named
-  constants, no magic numbers — and the small-spec section collapse
-  does not waive it. Every row is keyed by a name, never by a value.
-  Fixed values come in two kinds, distinguishable in the table: a named
-  constant — the value lives in the code under an identifier
-  (`MAX_RETRIES`) — keyed by that identifier, its single value with
-  units marked `fixed`, no default; and a magic number — a bare
-  literal with no identifier (`3`, `60000`) — keyed by a semantic name
-  chosen in the spec, lowercase hyphenated like a reference ID (e.g.
-  `batch-timeout-cap`); the name lives in the spec only, never in the
-  code, and the row notes that the code carries a nameless literal —
-  that is what distinguishes `magic` from `fixed` — with its single
-  value marked `magic`, no default. Each entry
-  states: (a) allowed values — for a parameter: type, range bounds or
-  enum members, discreteness (step), default, units where applicable;
-  for a fixed value of either kind: its single value with units and its
-  `fixed`/`magic` marker — no default, nothing to choose; (b) effect —
-  for a parameter: what differs at different values, boundary cases at
-  the extremes, interactions with other parameters when they exist; for
-  a fixed value: what its value causes — what happens when the timeout
-  elapses, the limit is hit, the count is exhausted. The behavior
-  itself stays in Requirements entries; the entry cites their IDs
-  instead of restating them. A limit the component itself enforces
-  through a baked-in value is a fixed value recorded here, not a Usage
-  constraints entry — Usage constraints keeps externally imposed budgets
-  and applicability bounds, never self-enforced limits.
-- **Requirements cite names, never their values.** When a requirement
-  describes behavior governed by a configurable parameter, a named
-  constant, a magic number, or an argument, it refers to the name — the
-  config key, constant identifier, argument name, or the spec-chosen
-  semantic name of a magic number, exactly as the spec keys it in
-  Interface or Configuration — not to a concrete value. The name is the
-  stable handle: values are re-tuned, differ per deployment, or arrive per
-  call, and a requirement that hard-codes a value silently breaks at the
-  first re-tune. A literal value never appears in a requirement line:
-  a magic number is first recorded in Configuration, keyed by its
-  spec-chosen semantic name, and the requirement cites that name (e.g.
-  `batch-timeout-cap`), never the literal; a default or a boundary is
-  a fact about the parameter, carried by its Configuration row, not by
-  the requirement.
-  The mechanical lint (section `5`) enforces the literal ban universally —
-   on every line outside the Configuration and Examples sections
-   (lines inside fenced code blocks are exempt too — section `5`),
-   requirement lines included: any numeric literal — with units
-   (`30 s`, `100%`) or bare (`3`, `0,5`) — is flagged. Example (user's
-  verbatim wording):
-   `R1.2 При достижении
-   exitTimeout процесс завершается.` — the parameter name `exitTimeout` is
-   cited, not its value (e.g. `30s`).
-- Sections may be collapsed in small specs; keep the header (Status, scope,
-  IDs) and the section names stable across the project.
-- Language: follow the project's existing spec language; for the first spec in
-  a project, use the user's language. Do not mix languages within one file.
-  No anglicisms: when the spec's language is not English, its prose uses that
-  language's native words — English borrowings are forbidden. A concept
-  lacking a native word is introduced as a defined term (full-ID rule above),
-  not as an ad-hoc borrowing. Two verbatim exceptions: term IDs are always
-  English (full-ID rule above), whatever the spec's language is; and code
-  identifiers and literals (`MAX_RETRIES`, `put(k, v)`, CLI verbs, config
-  keys) are code artifacts, not prose.
-- The spec states the CURRENT requirements only: when requirements change,
-  rewrite or delete the obsolete statements — no strikethrough archives inside
-  spec files. DEVIATIONS.md (section `6`) records only the resulting code-vs-spec
-  divergence, never the change itself.
-- **Verification entries (template section above)**: a spec section that
-  describes algorithms gets a `Verification` section when any of them is
-  checked with a formal tool. Each entry carries a stable ID — flat (V1)
-  or multi-level (V2.1), same ID syntax rules as R-IDs (unique, never
-  renumbered, multi-level) — and occupies exactly one
-  line, its fields separated by semicolons (template above). Rules:
-  - Name the exact algorithm (never "the algorithm" when the spec defines
-    several); cite its requirement IDs.
-  - State the abstraction level of the CHECK (tla-plus levels L0/L1/L2 or a
-    custom description) and what that level abstracts away — the level of the
-    verification, not of the spec.
-  - `Checked` claims exactly what the run established: TLC = bounded evidence
-    (record model bounds); TLAPS = proof (record the proof module). Never
-    write "verified" for what TLC only sampled within bounds.
-  - `Not checked` is mandatory — the deliberate gaps (bounds not explored,
-    fault classes not modeled, liveness skipped, no proof). An entry without
-    a Not-checked list overstates the result.
-  - A behavior change to a verified algorithm invalidates its entry: either
-    re-run and update, or drop the entry (and say so in the DEVIATIONS.md
-    record for that change). A stale entry claiming verification of behavior
-    that no longer exists is worse than no entry.
-- **Tests entries (template section above)**: when requirements are covered
-  by recorded tests, the spec carries a Tests section with one entry per
-  test: a stable ID — flat (T1) or multi-level (T1.1), same ID syntax
-  rules as R-IDs (unique, never renumbered, multi-level; a group ID is
-  a caption ending with a colon) — citing the requirement IDs it covers —
-  or, for a test checking an internal rule, implementation I-IDs — each
-  R-ID naming an existing requirement and each I-ID an existing
-  implementation entry; one entry per line (one-line rule
-  above). A test per requirement ID is the default expectation (section `7`).
-
-## 5. Post-change consistency check (always, before implementing)
-
-First the mechanical pass: run `speclint` (shipped in this skill's
-directory) over the changed spec files — and over `specs/index.md` and
-`specs/GLOSSARY.md` when they are touched. It checks the prefixed-entry
-format — R-ID syntax (the ID immediately followed by a period and a
-space), group/leaf colon consistency, unique IDs, E↔R
-mirroring; I-ID syntax with the same group/leaf, ancestor, uniqueness,
-and trailing-punctuation checks as the R family; V-ID, T-ID, and J-ID
-syntax with unique IDs per family; leaf
-Tests entries citing the R-IDs or I-IDs they cover, with every cited
-R-ID or I-ID (ID-range endpoints included, e.g. `R3-R7`) naming an
-existing requirement or implementation entry; the one-line rule for
-R, E, I, V, T, and J entries (an entry
-continuing onto an indented next line is an error, including a
-continuation of a line that already carries an ID error); the flat-list
-rule — prefixed entries form a flat list without indentation or nested
-children, an indented child entry is an error, and hierarchy is
-   expressed by multi-level IDs only — plus index path existence with
-   valid Status values, index Reference IDs whitelist-checked (lowercase
-   ASCII letters and digits, single hyphens; anything else is an error),
-   and glossary checks: term ID language — any
-non-ASCII letter (Cyrillic or any other alphabet) or uppercase letter
-in either part of the ID is an error — plus alphabetical order with
-resolvable prefixes (a glossary linted with no collected index
-references gets a `warning:` message — prefix resolution skipped —
-that counts toward the exit status: warnings yield `1` when no
-errors occurred). It also
-reports an error when any line outside the Configuration and Examples
-sections carries a bare numeric literal — a number starting a word,
-its token running over trailing letters (`3x`, `30s`) and decimal
-separators (`0,5`), with units (`30 s`, `100%`) or bare: literals are
-forbidden outside Configuration and Examples; cite the name the spec
-keys the value under in Interface/Configuration — a
-config key, argument name, fixed-value identifier, or the spec-chosen
-semantic name of a magic number (section `4` writing rules). The
-exemptions are narrow and mechanical: code literals inside backticks
-(`30s`); lines inside a fenced code block — a fence line at the left
-margin (`` ``` `` or `~~~`; the opening marker may carry a language
-tag) toggles the fence state, fenced lines are skipped by the literal
-scan, and headings inside a fence never switch the section; words
-whose digit directly follows a letter or digit — ID and
-level tokens (R1.2, E3, I2, L1, v1.2, TLS1.2), including the trailing
-digit of a cited dotted ID followed by its word (R1.3 minutes,
-R2.2 states) — an identifier segment, not a value; and a number glued
-to a preceding ALL-CAPS word, hyphen included (TLS 1.2, UTF-8). The
-section is tracked by `^#+` headings — a heading line itself is not
-scanned, and a heading inside a fenced block does not count — and the
-check runs unconditionally: a spec without
-Interface or Configuration sections gets the same errors.
-Configuration table rows and Examples (E-)entries are exempt by
-construction: they are the line families where concrete values live.
-Exit status: `0` — clean, `1` — warnings
-but no errors, `2` — lint errors; a usage error (invalid invocation)
-counts as an error and also yields `2`. Fix every finding before the
-semantic pass.
-
-After editing any spec, run the semantic pass over the *related* specs
-(found via the index, Dependencies sections, and shared vocabulary):
-
-- **Shared identifiers**: names, term IDs, message fields, config keys, error
-   codes, units (ms vs s), versions — same name must mean the same thing
-   everywhere.
-- **Direct contradictions**: one spec requires what another forbids
-   (ordering, defaults, error semantics, limits).
-- **Counterpart drift**: producer-side spec adds a field/state/flag the
-   consumer-side spec does not mention; a spec starts depending on a
-   constraint another spec dropped.
-- **Duplicate definitions**: the same rule now stated in two specs — reduce
-   to one canonical statement and link from the other.
-- **Reference resolution**: every reference ID cited in Dependencies or
-   Definitions, and every term prefix used by the changed spec, exists in
-   specs/index.md; a renamed/deleted reference leaves no dangling citations or
-   orphaned prefixes (paths in citations are themselves a finding). Same for
-   specs/GLOSSARY.md: rows must cite existing references (matching the term's
-   prefix), stay alphabetical by full ID, and cover every term the changed
-   spec introduced or stopped using; the term-ID language of glossary rows is
-   enforced mechanically (the `speclint` pass above), and in spec texts
-   (Definitions, requirement bodies) it remains a semantic-pass and review
-   check.
-- **Link symmetry and semantic validity**: every Dependencies entry in the
-   changed spec has the matching Used-by entry in the referenced spec (and
-   vice versa for specs whose Used by lists the changed reference); each
-   surviving link still has a live semantic basis — trace it to the concrete
-   requirement, definition, or interface element that uses it; a link whose
-   basis was deleted or rewritten away is removed from BOTH specs.
-- **Verification staleness**: if the change touches requirements cited by a
-   Verification entry (the algorithm's behavior), the entry no longer holds —
-   re-run the check and update the entry, or remove it; note the verification
-   impact in the DEVIATIONS.md record.
-- **Configuration coverage**: every parameter the change makes
-   configurable (or re-tunes) and every fixed value it introduces or
-   alters — named constant or magic number — has a Configuration entry
-   with both allowed values (the `fixed`/`magic` single value) and
-   effect (section `4`); entries citing requirement IDs that changed or
-   were retired are updated in the same commit.
-
-Resolution: fix the related spec when the fix is mechanical (renames,
-reference updates, counterpart mentions). Stop and ask the user when both
-statements look intentional — that is a design conflict, not a typo.
-
-## 6. DEVIATIONS.md: the open-divergence worklist
-
-Changes to target behavior are always made in the specification itself,
-immediately, in the same commit as the change. A behavior-changing spec edit
-opens a divergence between the updated spec (the new source of truth) and the
-code, which must now catch up — and ONLY that divergence is recorded in
-`DEVIATIONS.md` (root, small projects) or `specs/DEVIATIONS.md` (projects with
-a specs/ tree). Purpose: after the spec changes, this file answers "what code
-must be reworked, and what should a reviewer of that code check". A
-behavior-changing spec edit without a DEVIATIONS.md entry is incomplete —
-unless the conforming code lands in that same commit.
-
-**An entry is an open divergence, not a history record.** A DEVIATIONS.md entry
-exists only while the code↔spec divergence it describes is open: the mere
-existence of an entry asserts "this code does not yet match the spec". `Was`/`Now`
-describe the current state of that divergence — left: what the code still does,
-right: what the updated spec prescribes — not a past event. No open divergence,
-no entry. DEVIATIONS.md is not a changelog or a history of spec changes
-(history lives in git). If the conforming code lands in the same commit as
-the spec edit, no divergence is ever open and no entry is created.
-
-Entry format (append at the end; newest last):
-
-```markdown
-## D-007 2026-08-25 specs/queue.md
-Spec edit: R3 (delivery retries) rewritten — exponential backoff, unbounded
-  until ack or lease expiry.
-Was: max `3` retries, then dead-letter.
-Now: retry with `1s` doubling backoff while message lease is held.
-Code impact: retry loop in queue/worker.go must drop the attempt counter and
-  respect lease deadline; dead-letter emission moves to lease-expiry path.
-Tests: retry-count test (queue_test.go) invalidated — replace with
-  backoff-timing and lease-deadline tests.
-Review focus: unbounded retry cannot outlive the lease; dead-letter is emitted
-  exactly once per message.
-```
-
-Rules:
-- One entry per behavior-changing spec edit (one open divergence), stable ID
-  (`D-1`, `D-2`, ...; never renumber). Cite the spec requirement IDs it touches
-  (R3 above).
-- `Code impact` names the places to rework — files/modules are allowed HERE
-  (unlike the spec itself), because this worklist exists to drive code changes.
-- `Was` (what the code still does) / `Now` (what the updated spec prescribes)
-  state observable behavior, not implementation. This pair describes the
-  CURRENT open divergence — not "what was and what became" over time — and is
-  deleted together with the entry once the code conforms (lifecycle below).
-- `Review focus` lists what a code reviewer must verify for compliance with
-  the NEW spec — the checks that would not exist without this change.
-- Entries are never edited after the fact; corrections get a new entry
-  referencing the old one; the superseded entry is deleted in that same
-  commit (the reference resolves via git history).
-- **Entry lifecycle ends with conformance**: once the code matches the new spec
-  (implementation landed, tests updated and green), the entry is DELETED from
-  DEVIATIONS.md — in the same commit as the conforming code change, not later.
-  Conformance check: if the current spec and the code agree, the entry must not
-  exist; an entry discovered in that state is deleted immediately. DEVIATIONS.md
-  contains only open code-vs-spec divergences; it is a live worklist, never an
-  archive of applied changes (that history lives in git).
-- Small projects may start with DEVIATIONS.md in the root even before any
-  specs/ tree exists.
-
-## 7. Code ↔ spec compliance
-
-- Implementing from a spec: cite requirement IDs (commit message or PR text).
-  A test per requirement ID is the default expectation; recorded tests
-  carry stable T-IDs citing the R-IDs they cover (section `4` Tests).
-- Implementing a DEVIATIONS.md entry: cite its D-ID; when the change makes
-  the code conform to the new spec, remove the entry in that same commit
-  (section `6` lifecycle).
-- Encountering unspecified behavior while coding: do not improvise silently —
-  either extend the spec (obvious gap, mechanical) or ask.
-- Never edit a spec to retroactively match what the code already does without
-  flagging it: that rewrite is the diff between "intended" and "actual" and
-  must be visible to the user.
-- Reviewing code against a spec: any behavior without a backing requirement is
-  a finding (spec gap or bug), reported, not skipped.
-- Reviewing code that implements a deviation: walk the entry's `Review focus`
-  list explicitly before approving.
-
-## 8. Anti-patterns
-
-Findings grouped by area; every entry is reported, not skipped. The format
-entries mirror the template and writing rules of section `4` — change the
-three places together (section `4` preamble).
-
-### Spec-first and change flow
-- Code change shipped with no spec change (drift; the spec stops binding).
-- Behavior-changing spec edit without a DEVIATIONS.md entry — unless the
-  conforming code lands in that same commit (no divergence, no entry;
-  section `6`).
-- DEVIATIONS.md as an archive or changelog: entries surviving after the code
-  conforms (section `6` lifecycle), or reading `Was`/`Now` as "what was and what
-  became" history — an entry states an OPEN divergence and must not exist once
-  spec and code agree.
-- Keeping superseded/obsolete specs or spec parts "for reference" — delete or
-  rewrite them (section `3`); history lives in git.
-- Strikethrough archives or change logs inside spec files — the spec states
-  current requirements only; behavior changes land in the spec itself, the
-  divergences they open go to DEVIATIONS.md.
-- Resolving a spec-vs-spec contradiction by editing one side quietly.
-
-### Layout and index
-- Two specs of one component (root SPEC.md + specs/copy, centralized + colocated)
-  — one canonical, the other a pointer.
-- Colocated `<library>/<component>/SPEC.md` missing from the index.
-- Index rows for deleted/moved files; stale Status values.
-- Non-English index reference: a Cyrillic (or other non-ASCII) letter or an
-  uppercase letter in a Reference — the lint whitelist rejects it.
-
-### Links and citations
-- Renumbering requirements (breaks external references) — retire IDs instead.
-- Citing another spec by file path instead of its index reference ID — the
-  reference breaks on the first file move (section `4` writing rules).
-- One-sided links: A cites B in Dependencies but B's Used by lacks A (or the
-  link was removed from one side only when the semantic use ended).
-- Formal links without semantic basis — "related specs" entries kept for
-  history or courtesy; the tie must trace to a live requirement, definition,
-  or interface element or be deleted from both sides.
-- Using a term from another spec without listing that spec in Dependencies.
-
-### Terms and glossary
-- Bare or non-English terms: `connection` instead of `yt-core-bus/connection`,
-  a translated term, or a prefix naming no reference in the index; a
-  Cyrillic (or other non-ASCII) letter in either part (`queue/очередь`),
-  a mixed-alphabet ID (`очередь/lease`), or an uppercase letter
-  (`auth/Lease`) — the full English ID (lowercase ASCII letters, digits,
-  and hyphens in both parts) is mandatory at every occurrence
-  (sections `3a`, `4`).
-- Anglicisms in non-English spec prose: an English borrowing where the
-  spec's language has a native word — use the native word, or introduce
-  the concept as a defined term; the only verbatim English is term IDs
-  and code identifiers/literals (section `4` language rule).
-- specs/GLOSSARY.md out of sync: missing rows for introduced terms, dangling
-  rows for deleted references, `Defined in` disagreeing with the term prefix,
-  broken alphabetical order, or two definitions of one term ID.
-
-### Requirement format
-- Spec as narrative prose with no testable statements or IDs.
-- Compound requirements: one line bundling several behavior features
-  ("expires after TTL seconds and reads of expired keys return NOT_FOUND") —
-  one feature per requirement; split it (section `4` writing rules).
-- A prefixed entry — a requirement (R), an Implementation entry (I), an
-  Examples entry (E), a Verification entry (V), a Tests entry (T), a
-  Justification entry (J) —
-  wrapped onto several lines of the spec file — one entry, one line;
-  wrapping is forbidden however long the line grows (section `4` writing
-  rules).
-- A prefixed entry indented to nest it under its parent (a child R2.1
-  markdown-nested under R2) — prefixed entries form a flat list; the
-  multi-level ID alone expresses the hierarchy, never indentation
-  (section `4` writing rules).
-- Joined independent clauses or a stack of subordinate clauses inside a
-  requirement sentence — split the independent clauses into separate
-  sentences (into separate requirements when they state separate behavior
-  features); at most one condition or time subordinate clause per sentence
-  survives (section `4` writing rules).
-- Explanation, rationale, motivation, or an example merged into a requirement
-  line — requirement lines declare only; system-level purpose lives in
-  Overview, per-decision rationale lives in the Justification section as
-  Jx.y entries citing the requirement or configuration IDs they justify,
-   and examples and per-requirement explanations live in the Examples
-   section as Ex.y entries mirroring R-IDs (section `4`).
-- A Jx.y Justification entry citing no live requirement or configuration
-  entry — a dangling rationale; delete it or re-point it when the
-  justified decision retires (section `4`).
-- A group line that states a requirement, or a leaf ID carrying children —
-  an ID with children is a group caption ending with a colon; a leaf ends
-  with a period (section `4`).
-- An Ex.y Examples entry with no matching Rx.y — a dangling explanation;
-  delete it or re-point it when the requirement retires (section `4`).
-- Recorded test entries with no stable T-ID, or a Tests entry citing no
-  live requirement R-ID or implementation I-ID — no ID cited at all, or
-  a cited R-ID naming no existing requirement, or a cited I-ID naming
-  no existing implementation entry — a dangling test tracing to no live
-  requirement or internal rule verifies nothing spec-backed; give it a
-  T-ID and the R-IDs (I-IDs) it covers, re-point it when the covered
-  requirement or implementation entry retires,
-  or drop it (section `4`).
-- Undefined local terms in requirements: project jargon or ad-hoc names whose
-  interpretation is fixed nowhere — no Definitions entry, no GLOSSARY.md row;
-  requirement lines may use common terms and defined full-ID terms only
-  (sections `3a`, `4`).
-- Ambiguous or vague wording in a requirement line ("handles it reasonably",
-  "usually fast", "as appropriate") — a line the reader must interpret by
-  guessing is not a requirement (section `4` writing rules).
-
-### Interface and Configuration
-- Method-argument or result value domains declared outside Interface —
-  allowed values of arguments and results (the input/output contract, error
-  codes included) live in Interface; allowed values of configurable
-  parameters live in Configuration. A value domain in the wrong section or
-  nowhere is a spec gap.
-- A configurable parameter, named constant, or magic number with no
-  Configuration entry — or an entry missing allowed values (type,
-  bounds or enum, default, units; the `fixed`/`magic` value for a fixed
-  value) or the behavioral effect — is an undocumented knob or buried
-  magic number and a spec gap (section `4`).
-- Conflating the two fixed-value kinds: a magic number recorded as
-  `fixed` (the code carries a nameless literal, not an identifier), or
-  a named constant demoted to a `magic` row. A `magic` row is keyed by
-  a semantic name chosen in the spec, and its value notes the nameless
-  literal the code actually carries — the name lives in the spec only;
-  promoting the literal to a named constant is a code change, and only
-  then does its row become `fixed` keyed by the code identifier.
-- A requirement citing a value instead of the name the spec keys it
-  under (`the process exits after 30 s` where the rule is "on reaching
-  exitTimeout"; `above 60000 ms` where the rule is "above
-  `batch-timeout-cap`") — values are re-tuned and differ per
-  deployment; the name declared in Interface/Configuration (a code
-  identifier, or the spec-chosen semantic name for a magic number) is
-  the stable reference (section `4` writing rules).
-
-### Structure and scope
-- Spec detailing private implementation inside Requirements (locks
-  refactoring into the contract) — internal rules belong in the
-  Implementation section as I-entries, where their change prescribes no
-  observable-behavior difference (section `4`).
-- Mixing units/naming with sibling specs (the shared-vocabulary check exists
-  for this).
-
-### Verification
-- "Verified"/"tested" claims about algorithms with no Verification entry, or
-  entries that: name no specific algorithm (in a multi-algorithm spec),
-  carry no stable V-ID or span several lines (one entry, one line, fields
-  separated by semicolons), state no abstraction level, omit the
-  Not-checked list, claim proof for bounded TLC evidence, or survive a
-  behavior change to the algorithm.
+# Spec skill
+
+## Purpose
+
+Use this skill to author and review project specifications, align related contracts, check code against specifications, and implement approved requirements. `speclint` checks mechanical properties; semantic properties require a separate semantic pass and review.
+
+## When to use
+
+Use this skill when creating, changing, or reviewing `SPEC.md`, `specs/<component>.md`, `specs/index.md`, `specs/GLOSSARY.md`, or a colocated library `SPEC.md`; when a behavior change requires a spec-first flow; when checking related specifications for conflicts or contract drift; or when implementing code against an existing specification.
+
+Do not use it for README files, general project documentation, formal TLA+ specifications, TLC models, or proofs. A spec review does not authorize code changes or changes to the user's normative decisions.
+
+## Classify the request first
+
+Before editing files, classify the request as one of:
+
+- behavior, interface, or constraint change;
+- specification review;
+- implementation against an existing specification;
+- small, unambiguous change;
+- new initiative with several independently verifiable capabilities.
+
+Do not present an unconfirmed assumption as fact. Pause the affected decision when an unknown affects the public interface, security, compatibility, data integrity, or architectural boundaries. Pause affected work and ask the user to decide when normative requirements in related specifications substantively conflict. Confirm that the existing spec covers a requested implementation task; if it has a gap, update the spec or ask for a decision instead of silently improvising.
+
+## Spec placement and lifecycle
+
+- Use a root `SPEC.md` for a small project.
+- For a project with multiple components, use `specs/<component-or-feature>.md` and one `specs/index.md`.
+- If a second component boundary appears or the root spec grows to approximately `root-spec-growth-guide` (about 300 lines), suggest moving to a `specs/` tree without duplicating content.
+- An independently versioned library may keep a colocated `SPEC.md`; register it in the shared index.
+- With mixed placement, the index remains the single discovery point, and each component has one canonical spec.
+- A project with a `specs/` tree contains both `specs/index.md` and `specs/GLOSSARY.md`.
+- Include every spec in the index. Keep index paths current and unique, and give every entry `Path`, `Reference`, `Status`, and a one-line `Summary`.
+- A `Reference` is unique and uses lowercase ASCII letters and digits separated by single hyphens. In a small project without `specs/index.md`, use the component name in the spec heading as the `Reference` for cross-spec terminology and relationships.
+- Spec status is `draft` or `stable` and must match the index. `stable` is a mandatory active contract; code that deviates from it is a finding.
+- Remove or rewrite obsolete requirements in the current spec. Do not use archived copies, struck-through rules, a `deprecated` status, or changelogs inside specs.
+- When creating, changing, moving, or deleting a spec, synchronize the index and glossary wherever their data is affected.
+
+## Required spec structure
+
+Every spec starts with a heading naming the component, `Status: draft` or `Status: stable`, and `Spec source of truth for: <component/feature>`.
+
+Use only these section headings:
+
+- `Overview`
+- `Scope`
+- `Definitions`
+- `Interface`
+- `Configuration`
+- `Requirements`
+- `Implementation`
+- `Examples`
+- `Tests`
+- `Usage constraints`
+- `Justification`
+- `Error handling`
+- `Dependencies`
+- `Used by`
+- `Verification`
+
+Small specs may omit optional sections. `Tests` is required if at least one leaf `R-ID` has `verification=automated` or `verification=scenario`; if no such requirements exist, `Tests` may be omitted. Keep section names stable within a project. `Scope` defines `In` and `Out (non-goals)`. `Interface` documents external signatures, names, types, valid inputs and outputs, and the complete list of error codes. Include `Configuration` when parameters, named constants, or magic numbers exist.
+
+`Requirements` is the only section that serves as an independent source of obligations. It contains mandatory behavior and component properties observable by consumers through the public interface. Do not put internal decisions that do not affect observable behavior in `Requirements`.
+
+For bug fixes, add an `I-ID` to `Implementation` when it records an internal decision, constraint, or invariant needed to prevent recurrence. An `I-ID` must not introduce an independent mandatory rule or replace fixing the root cause or adding the corresponding `R-ID` when public behavior was affected.
+
+`Examples` explain existing requirements and reference their `R-ID`; they do not create new rules. `Tests` contains only concrete automated checks and deterministic multi-step scenarios. It references only leaf requirements marked `verification=automated` or `verification=scenario`, never `I-ID`s. Repeating a requirement without an independent procedure is not a test method.
+
+`Usage constraints` explains budgets, applicability boundaries, compatibility, security, and environment assumptions; record mandatory constraints in `Requirements` as well. `Justification` contains stable `J-ID`s that reference active requirements or `Configuration` entries. `Error handling` explains error semantics already defined in `Requirements` and listed in `Interface`; it introduces no new codes or rules. `Verification` records the algorithm properties checked, abstraction level, actual results, and a `Not checked` list.
+
+Describe algorithm contracts with steps, invariants, and complexity estimates at the contract level. Do not expose private source files, classes, or helper-function names as part of the external contract.
+
+## Requirement writing and identifiers
+
+- Give every requirement a stable, unique `R-ID`. Do not renumber existing IDs unless an explicitly approved migration updates all references. Gaps are allowed; do not fill them without confirmed content and approval.
+- Group requirements by semantic area using hierarchical IDs. A group ID has children, ends with a colon, and asserts no behavior. A leaf ID states one testable requirement and ends with a period.
+- Each leaf requirement must be declarative, unambiguous, and testable, and describe one behavioral capability without independent obligations, justifications, examples, or explanations.
+- Every leaf requirement contains exactly one `verification=<value>` marker immediately after its R-ID. Allowed values are `automated`, `scenario`, `manual`, and `analysis`.
+- `automated` means an automated test checks the requirement; `scenario` means a deterministic multi-step verification scenario exists; `manual` means a person checks it against criteria; `analysis` means analytical reasoning or proof checks the property.
+- Every leaf requirement describes behavior observable through the public interface. Move internal-only decisions to an appropriate non-normative section.
+- Refer to names defined in `Interface` or `Configuration`, not raw parameter values, constant values, or magic numbers.
+- Define local terms exactly in `Definitions` or `GLOSSARY.md`; use common or defined terms in normative wording.
+- Every non-trivial example mirrors the ID of the requirement it explains.
+
+Prefixed entry families belong only in their corresponding sections: `R` in `Requirements`, `I` in `Implementation`, `E` in `Examples`, `T` in `Tests`, `J` in `Justification`, and `V` in `Verification`. Every non-empty content line in these sections begins in column zero with `- ` followed by its corresponding ID. Each prefixed entry occupies exactly one line; do not use Markdown nesting to express hierarchy. Each leaf `T-ID` names the checked `R-ID` or IDs, a concrete procedure, conditions or inputs, and expected-result criteria.
+
+Every leaf `R-ID` marked `automated` or `scenario` must be covered by at least one `T-ID`. A separate `T-ID` is not required for `manual` or `analysis`. Missing required test coverage is a blocking finding. Each `Verification` entry applies to a precisely named algorithm and must not claim complete correctness based only on a limited TLC run.
+
+## Interface and configuration
+
+Define every public name, signature, type, allowed domain, and error code in `Interface`. State mandatory behavior associated with an interface domain in `Requirements` too.
+
+Each `Configuration` entry is keyed by name and specifies its type and effect. For parameters, specify allowed values and the default. For named constants, specify the identifier, single value, units where applicable, and `fixed`, without `default`. For an unnamed literal that acts as a magic number, define a semantic name and label it `magic`, without `default`. Link every mandatory behavioral consequence of configuration to an active `R-ID`. Requirements use parameter and constant names, not their numeric values.
+
+## Terms and relationships between specs
+
+- Use full project term IDs in the form `<reference>/<term>`; both parts contain only lowercase ASCII letters, digits, and hyphens.
+- When a project uses a `specs/` tree, add each new term to `GLOSSARY.md` in the same change as the spec.
+- Give each full term ID exactly one definition. Sort glossary entries strictly alphabetically by full term ID, one line per entry.
+- Each glossary entry includes `Defined in`, equal to the term's `Reference` prefix and, where necessary, requirement IDs.
+- Reuse an owned term by citing its full ID without changing the prefix or defining it again. List its owner spec in `Dependencies`.
+- Refer to another spec by its `Reference`, not its file path.
+- Every `Dependencies` relationship must have a semantic basis and a mirrored `Used by` entry. Update both sides together and remove both sides when the relationship no longer applies.
+- Write spec prose in the project's language. The first spec uses the user's language; do not mix languages within one file. In non-English prose, avoid undocumented anglicisms except full term IDs, identifiers and code literals, CLI verbs, and configuration keys.
+
+## Mechanical and semantic checks
+
+After every spec change:
+
+1. Run `speclint` first on the changed spec or relevant directory.
+2. Perform a separate semantic pass on the changed spec and related specs.
+3. Report mechanical-check results and semantic-review results separately.
+4. After changing a requirement, verify that the associated `Verification` entry is still current; update or remove stale entries.
+
+The semantic pass checks requirement clarity, testability and atomicity; cross-spec contradictions and contract drift; duplication of normative rules; consistency of public names, message fields, term IDs, configuration keys, error codes, units and versions; `Reference` resolution; glossary completeness, ordering and duplicate definitions; dangling references; mirrored `Dependencies`/`Used by` relationships; configuration completeness; language and terminology; and the substance of `Verification`.
+
+Do not claim that mechanical lint proves semantic correctness. Report checks not performed separately and do not claim full conformance while required checks have not been performed or known discrepancies remain open.
+
+## `speclint` contract
+
+Use `speclint <path>...` to check one or more Markdown files or directories. At least one path is required. A missing argument, nonexistent path, or existing file whose extension is not `.md` produces a diagnostic on `stderr` and returns `speclint-error-exit-code`.
+
+When checking a directory, process all `index.md` files recursively in sorted order first, then all `GLOSSARY.md` files, then the remaining `.md` files in sorted order. Determine file type by basename: `index.md` is an index, `GLOSSARY.md` is a glossary, and every other `.md` file is a spec. In directory mode, every `.md` file is a candidate. Apply checks to recognized prefixed entries and to numeric literals outside excluded areas.
+
+The mechanical checks include all of the following:
+
+- Check syntax and per-file uniqueness of `R`, `E`, `I`, `V`, `T`, and `J` IDs; required ancestors; valid group and leaf entries; and absence of groups without children.
+- Check that `E-ID`s mirror existing `R-ID`s; `Tests` references only existing leaf `R-ID`s marked `verification=automated` or `verification=scenario`; and prefixed entries occupy one line.
+- In `Requirements`, `Examples`, `Implementation`, `Verification`, `Tests`, and `Justification`, every non-empty content line must begin in column zero with `- ` immediately followed by an ID of that section's corresponding family, for both group and leaf entries. Report missing markers, missing IDs, and section-inappropriate prefixes.
+- Report a prefixed entry that begins with indentation or continues on a following indented line.
+- Prohibit bare numeric literals outside `Configuration`, `Examples`, backticks, and recognized fenced code blocks. Recognize integers and decimals, decimal separators using a dot or comma, and numeric tokens with alphabetic suffixes when the token begins with a number. Do not treat digits inside identifiers, versions, TLS-like tokens, or tokens beginning with a letter as bare numeric literals.
+- Recognize fenced code blocks only when the fence marker begins in column zero. Skip their lines. The closing marker does not need to match the opening marker's character or length. If no closing marker occurs, treat all following lines through end of file as part of the block for numeric scanning and section switching. Headings inside a recognized block do not change the scanner's section; a heading outside a block determines the section by the first alphabetic word in the heading.
+- For indexes, check `Path`, `Reference`, `Status`, and `Summary`; validate `Status` and `Reference`; and check that each path exists. Resolve index paths relative to the Git repository root, or, if that root cannot be determined, relative to the parent directory of `specs/` or the index directory itself.
+- For glossaries, check term-ID format, use of the English alphabet, alphabetical sorting, and the `Defined in` field format. Resolve term-ID prefixes against `Reference` IDs collected from indexes. If no `Reference` IDs were collected, skip only prefix-resolution checking and emit a warning.
+- Check that every leaf `R-ID` has exactly one `verification` marker and that its value is one of `automated`, `scenario`, `manual`, or `analysis`.
+- Check that every leaf `R-ID` marked `automated` or `scenario` is referenced by at least one leaf entry in `Tests`. `manual` and `analysis` requirements do not need a `T-ID`. Missing required coverage is an error. A present reference does not prove that the test procedure is semantically sufficient.
+
+Write findings to `stderr` in the format `<file>:<line>: <message>`. Warnings must have the prefix `speclint: warning:`. Return `speclint-clean-exit-code` when there are no findings, `speclint-warning-exit-code` when warnings occur without errors, and `speclint-error-exit-code` when errors occur. These are fixed configuration entries: `speclint-clean-exit-code` is `0`, `speclint-warning-exit-code` is `1`, and `speclint-error-exit-code` is `2`.
+
+Do not describe semantic checks as capabilities of `speclint` unless the script mechanically performs them. Document and account for line-by-line scanner limitations during review, including its inability to detect unindented continuations and its fenced-code-block recognition behavior. Mechanical checking does not establish requirement clarity, atomicity, semantic completeness of configuration, truth of `Verification`, semantic justification of relationships, or language quality. Prefix-resolution warnings skip only that resolution check, not the rest of linting.
+
+## Open deviations
+
+`DEVIATIONS.md` contains only confirmed, unresolved discrepancies between the active spec and code; it is not a changelog or archive.
+
+- If the spec changes without a conforming code change in the same change, add one entry for each confirmed discrepancy.
+- If the spec and conforming code change together, do not create an entry for a discrepancy that does not exist.
+- Each entry describes one discrepancy, has a stable `D-ID`, and includes the date, spec identifier, `Spec edit`, `Was`, `Now`, `Code impact`, `Tests`, and `Review focus`.
+- `Was` describes observable code behavior; `Now` describes the mandatory behavior of the updated spec.
+- Append new entries to the end and never renumber IDs.
+- Document a correction in a new entry that references the old one, and remove the superseded entry in the same change.
+- Remove a deviation only in the change where code, tests, and review confirm conformance with the updated spec.
+- Implementations, tasks, tests, commits, and PRs reference normative `R-ID`s. An `I-ID` does not replace an `R-ID` as the basis for conformance.
+- Report behavior without a normative basis as a spec gap or bug. Review every item in `Review focus` before approving a deviation fix.
+
+## Planning and implementation
+
+For a new initiative with several independently verifiable capabilities, agree on the Scope Check before writing component specs. Record each module's `Reference`, responsibilities and boundaries, dependencies, build order, and boundary interfaces. The Scope Check does not replace `specs/index.md` or create another spec catalog. If mandatory contracts create a cyclic module dependency, propose revised boundaries or ask the user to decide.
+
+Before approving a spec, check boundaries and exclusions, interfaces, configuration, dependencies, terms, normal and edge scenarios, errors, success criteria, and required-check results.
+
+For significant changes, complete checkpoints in this order: `Scope` (if applicable), `Spec`, `Plan`, `Tasks`, `Implementation review`. Advance automatically when readiness criteria are met unless another requirement calls for explicit approval; feedback returns the current checkpoint for revision. A small, unambiguous task may use a shortened process with a brief list of affected requirements and acceptance criteria.
+
+Do not begin implementation of a significant change until the spec, plan, and tasks are approved unless the user explicitly authorizes another mode. Autonomous mode does not waive blocking risks or conflicts. The plan records components, dependencies, order, critical path, risks, unknowns, checks, permitted parallelism, and checkpoints. Each task records acceptance criteria, a verification step, expected files, and approved `R-ID`s. By default, use `plan.md` and `issues.md` unless the project uses a compatible system or another format is specified. If a task affects approximately `task-file-count-decomposition-guide` files or more (about five files), consider further decomposition.
+
+For significant implementation work, maintain the traceability chain `Requirement ID → Task → Test ID / verification evidence → Implementation`. After implementation, run prescribed checks, compare each affected requirement with actual behavior, check test quality, and update `Tests` and `Verification`.
+
+When changing these skill instructions, check consistency across affected requirements, section structure, `Interface`, `Configuration`, `speclint`, its tests, and the documented limits of mechanical checking.
+
+## Review and final report
+
+Review should report:
+
+- behavior-changing commits without an up-to-date spec;
+- spec changes without corresponding code and without an open deviation;
+- deviations that remain after they are closed;
+- duplicate specs, missing or extra index rows, stale status, or invalid `Reference` values;
+- file-path references used instead of `Reference` IDs, one-sided or semantically empty relationships, and use of another spec's term without a dependency;
+- incomplete term IDs, an unsynchronized glossary, duplicate definitions, and inappropriate anglicisms;
+- compound or untestable requirements, unstable IDs, incorrect grouping, multi-line prefixed entries, Markdown-nested entries, and dangling references;
+- undocumented `Interface` values, missing `Configuration` entries, incorrect use of `fixed` and `magic`, raw numeric values where names are required, and private implementation details presented as external requirements;
+- incomplete or stale `Verification`, including overclaims based on limited TLC runs.
+
+The final report lists changed specs and affected IDs, related artifacts, results of `speclint`, semantic review and tests, plus unchecked requirements, assumptions, risks, and open deviations. State explicitly which checks were not performed.
+
+## Mandatory specification-compliance gate
+
+Before declaring a specification complete, walk through every applicable leaf requirement in this skill's source specification, `SPEC.md`, and record its disposition in the review notes. Do not treat a section-level summary as evidence that every leaf rule was applied. For each requirement, confirm the artifact or decision that satisfies it, or record it as not applicable with a reason, blocked by an unresolved decision, or not checked. Never silently omit a requirement.
+
+Use this order for every specification change:
+
+1. **Classify and scope.** Apply R1 and R2: classify the request; establish whether it is a behavior change; identify canonical specs; preserve stable IDs; resolve unknowns and conflicts by the stated pause/decision rules; update the index and glossary when affected.
+2. **Structure and normative content.** Apply R3 and R4: validate the heading, status and source-of-truth line; use only permitted sections; put independent obligations only in `Requirements`; define public behavior observably; keep internal implementation notes non-normative; follow the ID, one-line entry, verification-marker, example, and test rules.
+3. **Interfaces and configuration.** Apply R5: document every public name, signature, type, domain, output and error code; repeat mandatory interface behavior in `Requirements`; define every parameter, constant and magic number with the correct fields and labels; link behavioral consequences to active `R-ID`s and use names instead of numeric values in requirements.
+4. **Terms and relationships.** Apply R6: validate full term IDs, definitions, sorting and `Defined in`; add new terms to the glossary in the same change where applicable; reuse owner IDs without redefining terms; use `Reference` rather than paths; synchronize both sides of each dependency; check language and anglicisms.
+5. **Mechanical check, then semantic check.** Apply R7 and R8: run `speclint` first, then separately review the changed spec and related specs. Use the complete `speclint` contract above. Re-check the associated `Verification` whenever a requirement changes. Report the two check types separately and never equate lint success with semantic correctness.
+6. **Deviation accounting.** Apply R7.5–R7.15: record only confirmed open discrepancies; use one stable `D-ID` per discrepancy and all required fields; append without renumbering; supersede corrected entries correctly; close only when code, tests and review establish conformance; keep implementation artifacts tied to normative `R-ID`s.
+7. **Planning and implementation.** Apply R9: perform Scope Check for multi-capability initiatives; inspect boundaries, interfaces, dependencies, terms, normal and edge scenarios, errors and success criteria; follow the checkpoint order and approval gate; record plan and task details; preserve requirement-to-task-to-test-to-implementation traceability; run prescribed checks and update `Tests` and `Verification` after implementation.
+8. **Review and report.** Apply R10: check cross-spec contradictions, contract drift, duplicate normative rules, identifiers and configuration consistency, glossary and relationship integrity, requirement quality, interface/configuration completeness, and `Verification` claims. Report changed specs and affected IDs, related artifacts, mechanical results, semantic results, tests, unchecked requirements, assumptions, risks and open deviations.
+
+A specification is not reported as fully conforming while any applicable requirement is unchecked, any required check is missing, any blocking coverage finding exists, or any known discrepancy remains open. If the source `SPEC.md` changes, first compare this skill against the new source and update the skill before relying on it for further specification work.
+
+## Configuration values governed by the source spec
+
+Treat these as fixed configuration entries rather than independent informal defaults:
+
+- `root-spec-growth-guide`: integer, approximately 300 lines; a guideline for suggesting a move from a root `SPEC.md` to a `specs/` tree; related to R2.3.
+- `speclint-clean-exit-code`: integer `0`; exit code when there are no findings; related to R6.5.
+- `speclint-warning-exit-code`: integer `1`; exit code for warnings without errors; related to R6.5.
+- `speclint-error-exit-code`: integer `2`; exit code for lint errors or invalid invocation; related to R6.1 and R6.5.
+- `task-file-count-decomposition-guide`: integer, approximately five files; a guideline for considering task decomposition; related to R8.7.
+
+Use these names when referring to the values in normative instructions. Requirements must not substitute raw numeric values for parameter or constant names.
+
+## Source requirement coverage index
+
+Use this index as a final coverage sweep against the current source `SPEC.md`. It supplements, and does not replace, reading and applying each leaf requirement.
+
+- `R1.1–R1.12`: use cases, classification, uncertainty, conflicts, authorization boundaries, confirming scope, and honest reporting — `When to use`, `Classify the request first`, `Mechanical and semantic checks`.
+- `R2.1–R2.13`: file placement, index, Reference, status, stable contracts, obsolete rules, synchronized index/glossary — `Spec placement and lifecycle`.
+- `R3.1–R3.19`: header, allowed sections, conditional `Tests`, section responsibilities, family placement, line format, verification markers — `Required spec structure`, `Requirement writing and identifiers`.
+- `R4.1–R4.14`: stable hierarchical IDs, atomic/testable/observable requirements, terms, examples, verification and test procedures — `Requirement writing and identifiers`, `Interface and configuration`, `Mechanical and semantic checks`.
+- `R5.1–R5.8`: complete interface and configuration contracts, correct parameter/constant/magic-number fields, links to active requirements — `Interface and configuration`.
+- `R6.1–R6.13`: term IDs, glossary, owner terms, dependencies, mirrored relationships, language — `Terms and relationships between specs`.
+- `R7.1–R7.15`: lint-first order, semantic pass, current Verification, deviation lifecycle and traceability — `Mechanical and semantic checks`, `Open deviations`.
+- `R8.1–R8.27`: complete CLI, ordering, scanner, index/glossary checks, diagnostics, exit codes, limitations and test coverage — `speclint contract`.
+- `R9.1–R9.20`: Scope Check, approval checkpoints, plan/tasks, decomposition, traceability and implementation verification — `Planning and implementation`.
+- `R10.1–R10.13`: semantic review and final-report findings — `Review and final report`.
+
+If any item in the index is not fully covered by the operative instructions, update those instructions; the presence of an index entry alone is not compliance.

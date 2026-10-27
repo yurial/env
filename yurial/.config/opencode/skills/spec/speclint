@@ -1,530 +1,397 @@
-#!/bin/sh
-# speclint — mechanical checks over specs authored with the spec skill.
-#
-# Usage: speclint <path>...
-#   path: a spec .md file, an index.md, a GLOSSARY.md, or a directory
-#         (a directory lints every index.md found inside first — collecting
-#         reference IDs — then every GLOSSARY.md, then every other .md file
-#         recursively).
-#
-# Spec file checks:
-#   - requirement lines match "- R<digits>(.<digits>)*[.] Text" — the
-#     ID immediately followed by a period and a space;
-#   - a leaf line ends with '.', a group line ends with ':';
-#   - an ID with children is a group, an ID without children is a leaf;
-#   - requirement IDs are unique; every child's ancestor IDs exist and
-#     are groups;
-#   - implementation lines match "- I<digits>(.<digits>)*[.] Text" — the
-#     ID immediately followed by a period and a space; implementation
-#     IDs are unique; the group/leaf, ancestor, and trailing-punctuation
-#     checks for I mirror the R family (a leaf ends with '.', a group
-#     with ':');
-#   - every Examples entry E<x> mirrors an existing requirement R<x>;
-#   - verification lines match "- V<digits>(.<digits>)*[.] Text" and
-#     verification IDs are unique;
-#   - tests lines match "- T<digits>(.<digits>)*[.] Text", test IDs are
-#     unique, every leaf Tests entry cites a requirement R-ID or an
-#     implementation I-ID, and every R-ID or I-ID cited by a Tests
-#     entry (ID-range endpoints included, e.g. R3-R7) names an existing
-#     requirement or implementation entry;
-#   - justification lines match "- J<digits>(.<digits>)*[.] Text" and
-#     justification IDs are unique;
-#   - a prefixed entry (R, E, I, V, T, J) must not continue onto an indented
-#     next line: one entry occupies exactly one line;
-#   - prefixed entries form a flat list: a line that is itself indented
-#     prefixed entry (matching leading whitespace + "- R2.1." style)
-#     is an error - hierarchy is expressed by multi-level IDs only,
-#     never by markdown nesting. An indented child still counts as a
-#     child for the group/leaf consistency checks, but is registered
-#     nowhere else: fix the indentation and re-run to surface any
-#     structural findings (duplicate IDs, ancestors) on the newly
-#     visible entry;
-#   - a bare numeric literal — a number starting a word: the digits
-#     plus trailing word characters (3x, 30s), decimal-separator
-#     groups included (0,5) — on any line outside the Configuration
-#     and Examples sections is an error: literals are forbidden
-#     outside Configuration and Examples; cite the name the spec keys
-#     the value under in Interface/Configuration instead (config key,
-#     argument name, fixed-value identifier, or the spec-chosen
-#     semantic name of a magic number). Exempt (documented in SKILL.md
-#     section 5): code literals inside backticks (`30s`); lines inside
-#     a fenced code block - a column-0 ``` or ~~~ line toggles the
-#     fence state (the opening marker may carry a language tag):
-#     fenced lines are skipped by the literal scan, and headings
-#     inside a fence never switch the section; words whose
-#     digit directly follows a letter or digit (R1.2, E3, I2, L1, v1.2,
-#     TLS1.2) — including the trailing digit of a cited dotted ID
-#     followed by its word (R1.3 minutes, R2.2 states), an identifier
-#     segment, not a value; and a number glued to a preceding ALL-CAPS
-#     word, hyphen included (TLS 1.2, UTF-8). The section is tracked
-#     by ^#+ headings; heading lines themselves are not scanned, and
-#     inside a fence heading lines do not count at all; the check
-#     runs regardless of which sections the file has.
-# index.md checks:
-#   - row paths exist; Status is draft or stable; Reference is a lowercase
-#     hyphen-separated unique ID.
-# GLOSSARY.md checks (one finding of one class per term ID row):
-#   - term ID form — the structure <reference>/<term>: exactly one
-#     slash, both parts non-empty; a form violation is reported alone
-#     (case and alphabet belong to the language check below);
-#   - term ID language — strictly English: any non-ASCII letter
-#     (Cyrillic or any other alphabet) or uppercase letter in either
-#     part of a structurally valid ID is an error "term ID must be
-#     strictly English (<term ID>)"; digits and hyphens are allowed in
-#     both parts; the check covers GLOSSARY.md rows only — term-ID
-#     language in spec texts is not scanned (semantic pass, review);
-#     an ID valid in both checks proceeds to the remaining checks;
-#   - alphabetical order; Defined in equals the term prefix (optionally
-#     with requirement IDs); the prefix resolves against the collected
-#     index references — with none collected, that resolution is
-#     skipped with a warning (exit 1 when no errors).
-#
-# Findings go to stderr; warnings carry a "warning:" prefix. Exit status:
-# 0 — clean, 1 — warnings but no errors, 2 — lint errors; a usage error
-# (invalid invocation) counts as an error: also 2.
-# Known limit: only an indented continuation of a prefixed entry is
-# detected; a non-indented (lazy markdown) continuation is invisible to a
-# line-based lint, and the one-line rule stays partly a review check.
-# Known limit: fence tracking is a blind column-0 toggle - the closing
-# marker is not matched to the opener (length, ``` vs ~~~), an indented
-# fence opener is not recognized, and an unclosed fence suppresses the
-# literal scan and section switching to the end of the file.
+#!/usr/bin/env python3
+"""Mechanical Markdown specification, index, and glossary linter.
 
-set -u
+The rules implemented here are the executable interpretation of SPECLINT.md.
+Semantic quality and correctness of requirement meaning are intentionally out of scope.
+"""
+from __future__ import annotations
 
-# fail aggregates per-unit exit codes as their maximum: 2 (errors) beats
-# 1 (warnings only) beats 0 (clean).
-fail=0
+import argparse
+import re
+import subprocess
+import sys
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Iterable
 
-[ $# -ge 1 ] || { printf 'usage: speclint <path>...\n' >&2; exit 2; }
+CLEAN = 0
+WARNING = 1
+ERROR = 2
+FAMILIES = {"R": "Requirements", "I": "Implementation", "E": "Examples", "V": "Verification", "T": "Tests", "J": "Justification"}
+RECORD_SECTIONS = {"Requirements", "Examples", "Implementation", "Verification", "Tests", "Justification"}
+ALLOWED_VERIFICATION = {"automated", "scenario", "manual", "analysis"}
+PREFIX_RE = re.compile(r"^- ([REIVTJ]\d+(?:\.\d+)*)\.(?:\s|$)")
+NUMERIC_RE = re.compile(r"(?<![A-Za-z0-9_.])\d+(?:[.,]\d+)*(?:[A-Za-z][A-Za-z0-9_-]*)?(?![A-Za-z0-9_])")
+INLINE_CODE_RE = re.compile(r"(`+).*?\1")
 
-refsrc=$(mktemp "${TMPDIR:-/tmp}/speclint.refs.XXXXXX") || exit 2
-filelist=$(mktemp "${TMPDIR:-/tmp}/speclint.list.XXXXXX") || exit 2
-trap 'rm -f "$refsrc" "$filelist"' EXIT INT TERM
+@dataclass
+class Finding:
+    path: Path
+    line: int
+    message: str
+    warning: bool = False
 
-lint_spec() {
-    awk '
-        function err(nr, m) {
-            printf "%s:%d: %s\n", FILENAME, nr, m > "/dev/stderr"
-            bad = 1
-        }
-        function warn(nr, m) {
-            printf "%s:%d: warning: %s\n", FILENAME, nr, m > "/dev/stderr"
-            warned = 1
-        }
-        function blank(s,   n, sp) {
-            # replace the last match() span with spaces of equal length
-            sp = ""
-            for (n = 1; n <= RLENGTH; n++) sp = sp " "
-            return substr(s, 1, RSTART - 1) sp substr(s, RSTART + RLENGTH)
-        }
-        # Fenced code blocks: a column-0 ``` or ~~~ line toggles the
-        # in-fence state; the opening marker may carry a language tag
-        # on the same line (```sh, ~~~markdown) - the tag never breaks
-        # the toggle. A fence boundary is a structural line like a
-        # heading: it resets pend. Inside a fence the content is
-        # verbatim: heading lines do not switch the section, and the
-        # literal scan skips every line.
-        /^(```|~~~)/ {
-            infence = !infence
-            pend = ""
-            next
-        }
-        # The current section: the innermost ^#+ heading, taken as its
-        # first alphabetic word ("## 1b. Foo" -> ""). Heading lines
-        # define the section context and are not scanned for literals;
-        # they reset pend (a heading is never an indented continuation,
-        # and it ends the reach of the previous entry). Headings inside
-        # a fence do not run: an in-fence # line is verbatim content,
-        # not a heading.
-        !infence && /^#+[ \t]/ {
-            cursec = $0
-            sub(/^#+[ \t]*/, "", cursec)
-            sub(/[^A-Za-z].*$/, "", cursec)
-            pend = ""
-            next
-        }
-        # Universal bare-numeric-literal scan: every non-heading,
-        # non-fenced line outside the Configuration and Examples
-        # sections. A word is a
-        # run of [A-Za-z0-9_] optionally continued by .digit or ,digit
-        # groups (R1.2, v1.2, 0,5); a word that STARTS with a digit
-        # sits at a word boundary (line start or a non-word character
-        # before it): a bare numeric literal, its token the digits plus
-        # trailing word characters (30s, 3x) and decimal-separator
-        # groups. Words starting with a letter never match by
-        # construction: their digit follows a letter or digit (the
-        # master f7e5a21 FP rules for R1.2, E3, I2, L1, v1.2, TLS1.2, and
-        # the trailing digit of a cited dotted ID followed by its
-        # word, R1.3 minutes). The remaining FP rule is
-        # post-filtered: a number glued to a preceding ALL-CAPS word,
-        # hyphen included (TLS 1.2, UTF-8) — the character directly
-        # before the token plus optional spaces/tabs before it must
-        # end in an ALL-CAPS word for the exemption to apply. Lines
-        # inside a fenced code block are skipped here (in-fence state
-        # above): fenced content is code, not spec prose.
-        !infence && cursec != "Configuration" && cursec != "Examples" {
-            line = " " $0 " "
-            # numbers inside backticks are code literals: blank the spans
-            while (match(line, /`[^`]*`/)) line = blank(line)
-            n = length(line)
-            i = 1
-            while (i <= n) {
-                if (substr(line, i, 1) !~ /[A-Za-z0-9_]/) { i++; continue }
-                j = i
-                while (j <= n && substr(line, j, 1) ~ /[A-Za-z0-9_]/) j++
-                while (j < n && (substr(line, j, 1) == "." || substr(line, j, 1) == ",") && substr(line, j + 1, 1) ~ /[0-9]/) {
-                    j++
-                    while (j <= n && substr(line, j, 1) ~ /[A-Za-z0-9_]/) j++
-                }
-                if (substr(line, i, 1) ~ /[0-9]/ && substr(line, 1, i - 2) !~ /[A-Z][A-Z]+[ \t]*$/)
-                    err(NR, (cursec == "" ? "spec file" : cursec " section") " contains a bare numeric literal (" substr(line, i, j - i) ") - forbidden outside Configuration and Examples; cite the name the spec keys the value under in Interface/Configuration")
-                i = j
-            }
-        }
-        # One-line rule: a prefixed entry (R/E/I/V/T/J) must not continue onto
-        # an indented next line. Flat-list rule: a line that is itself an
-        # indented prefixed entry violates the flat list - hierarchy is
-        # expressed by multi-level IDs only. This block runs first for every
-        # line and clears pend; the entry blocks below then set pend for the
-        # next line to check - on every path, including their early-error
-        # paths (malformed ID punctuation, duplicate ID), so a wrapped
-        # continuation is always attributed to the line that started it.
-        # The flat-list branch clears pend explicitly: an indented child
-        # entry already carries the flat-list error and must not also be
-        # reported as a wrap of its parent.
-        {
-            if ($0 ~ /^[ \t]+- [RAEIVTJ][0-9]/) {
-                cid = $0
-                sub(/^[ \t]+- /, "", cid)
-                fam = substr(cid, 1, 1)
-                sub(/^[RAEIVTJ]/, "", cid)
-                sub(/[^0-9.].*$/, "", cid)
-                sub(/\.$/, "", cid)
-                err(NR, "prefixed entries must be a flat list - indented child entry \"" fam cid "\" found; express hierarchy via multi-level IDs")
-                # only R- and I-family children take part in the
-                # group/leaf structure of their family; seen keys are
-                # "." + numeric ID (no letter).
-                if (fam == "R")
-                    indented["." cid] = 1
-                if (fam == "I")
-                    iindented["." cid] = 1
-                pend = ""
-                next
-            }
-            if (pend != "" && $0 ~ /^[ \t]+/)
-                err(pendnr, "entry " pend " is wrapped onto the next line - one entry occupies exactly one line, wrapping is forbidden")
-            pend = ""
-        }
-        /^- R[0-9]+(\.[0-9]+)*[ .:]/ {
-            id = $0; sub(/^- R/, "", id); sub(/[^0-9.].*$/, "", id); sub(/\.$/, "", id)
-            tail = $0; sub(/^- R[0-9]+(\.[0-9]+)*/, "", tail)
-            # pend is set before the early-error paths (malformed ID
-            # punctuation, duplicate ID) so that a wrapped continuation
-            # of an already-erroring line is still diagnosed as its wrap.
-            pend = "R" id; pendnr = NR
-            if (substr(tail, 1, 2) != ". ") {
-                err(NR, "requirement ID must be followed by a period and a space")
-                next
-            }
-            key = "." id
-            if (key in seen) {
-                err(NR, "duplicate requirement ID R" id)
-                next
-            }
-            seen[key] = substr($0, length($0), 1)
-            ln[key] = NR
-            # The bare-numeric-literal scan is universal (see the
-            # section-tracking block above): every line outside the
-            # Configuration and Examples sections is scanned there,
-            # requirement lines included.
-        }
-        /^- I[0-9]+(\.[0-9]+)*[ .:]/ {
-            iid = $0; sub(/^- I/, "", iid); sub(/[^0-9.].*$/, "", iid); sub(/\.$/, "", iid)
-            itail = $0; sub(/^- I[0-9]+(\.[0-9]+)*/, "", itail)
-            # pend is set before the early-error paths, mirroring the
-            # R block, so a wrapped continuation of an already-erroring
-            # line is still diagnosed as its wrap.
-            pend = "I" iid; pendnr = NR
-            if (substr(itail, 1, 2) != ". ") {
-                err(NR, "implementation ID must be followed by a period and a space")
-                next
-            }
-            ikey = "." iid
-            if (ikey in iseen) {
-                err(NR, "duplicate implementation ID I" iid)
-                next
-            }
-            iseen[ikey] = substr($0, length($0), 1)
-            iln[ikey] = NR
-        }
-        /^- E[0-9]+(\.[0-9]+)*\./ {
-            eid = $0; sub(/^- E/, "", eid); sub(/[^0-9.].*$/, "", eid); sub(/\.$/, "", eid)
-            pend = "E" eid; pendnr = NR
-            if (!("." eid in seen))
-                err(NR, "Examples entry E" eid " mirrors no requirement R" eid)
-        }
-        /^- V[0-9]+(\.[0-9]+)*[ .:]/ {
-            vid = $0; sub(/^- V/, "", vid); sub(/[^0-9.].*$/, "", vid); sub(/\.$/, "", vid)
-            vtail = $0; sub(/^- V[0-9]+(\.[0-9]+)*/, "", vtail)
-            pend = "V" vid; pendnr = NR
-            if (substr(vtail, 1, 1) != ".") {
-                err(NR, "verification ID must be followed by a period and a space")
-                next
-            }
-            if (vid in vseen) {
-                err(NR, "duplicate verification ID V" vid)
-                next
-            }
-            vseen[vid] = 1
-        }
-        /^- T[0-9]+(\.[0-9]+)*[ .:]/ {
-            tid = $0; sub(/^- T/, "", tid); sub(/[^0-9.].*$/, "", tid); sub(/\.$/, "", tid)
-            ttail = $0; sub(/^- T[0-9]+(\.[0-9]+)*/, "", ttail)
-            pend = "T" tid; pendnr = NR
-            if (substr(ttail, 1, 1) != ".") {
-                err(NR, "test ID must be followed by a period and a space")
-                next
-            }
-            if (tid in tseen) {
-                err(NR, "duplicate test ID T" tid)
-                next
-            }
-            tseen[tid] = 1
-            if (ttail !~ /[RI][0-9]/ && substr($0, length($0), 1) != ":")
-                err(NR, "Tests entry T" tid " cites no requirement R-ID or implementation I-ID")
-            # Citation existence: every R-ID or I-ID cited on a Tests
-            # entry line (ID-range endpoints included, e.g. R3-R7) must
-            # name an entry seen in this file. V and J citations are
-            # not checked.
-            cre = $0
-            while (match(cre, /[RI][0-9]+(\.[0-9]+)*/)) {
-                ctok = substr(cre, RSTART, RLENGTH)
-                ckey = "." substr(ctok, 2)
-                if (substr(ctok, 1, 1) == "R" && !(ckey in seen))
-                    err(NR, "test T" tid " cites nonexistent requirement " ctok)
-                if (substr(ctok, 1, 1) == "I" && !(ckey in iseen))
-                    err(NR, "test T" tid " cites nonexistent implementation ID " ctok)
-                cre = substr(cre, RSTART + RLENGTH)
-            }
-        }
-        /^- J[0-9]+(\.[0-9]+)*[ .:]/ {
-            jid = $0; sub(/^- J/, "", jid); sub(/[^0-9.].*$/, "", jid); sub(/\.$/, "", jid)
-            jtail = $0; sub(/^- J[0-9]+(\.[0-9]+)*/, "", jtail)
-            pend = "J" jid; pendnr = NR
-            if (substr(jtail, 1, 1) != ".") {
-                err(NR, "justification ID must be followed by a period and a space")
-                next
-            }
-            if (jid in jseen) {
-                err(NR, "duplicate justification ID J" jid)
-                next
-            }
-            jseen[jid] = 1
-        }
-        END {
-            for (k in seen) {
-                haschild = 0
-                for (j in seen)
-                    if (j != k && index(j, k ".") == 1) { haschild = 1; break }
-                # an indented child (flat-list violation) still counts as
-                # a child: the flat-list error already flags it, the
-                # group/leaf consistency must not pile a second,
-                # misleading finding on top.
-                if (!haschild)
-                    for (j in indented)
-                        if (index(j, k ".") == 1) { haschild = 1; break }
-                if (seen[k] == ":" && !haschild)
-                    err(ln[k], "group ID R" substr(k, 2) " has no children")
-                if (seen[k] == "." && haschild)
-                    err(ln[k], "leaf ID R" substr(k, 2) " has children - a group line ends with a colon")
-                if (seen[k] != "." && seen[k] != ":")
-                    err(ln[k], "requirement line R" substr(k, 2) " must end with . (leaf) or : (group)")
-                p = k
-                while (sub(/\.[0-9]+$/, "", p) > 0 && p != "") {
-                    if (!(p in seen)) {
-                        err(ln[k], "ancestor ID R" substr(p, 2) " of R" substr(k, 2) " is missing")
-                        break
-                    }
-                    if (seen[p] == ".")
-                        err(ln[p], "ancestor ID R" substr(p, 2) " of R" substr(k, 2) " is a leaf, must be a group (:)")
-                }
-            }
-            # The I family gets the same group/leaf, ancestor, and
-            # trailing-punctuation checks as R (unique IDs were checked
-            # inline; iseen keys are "." + numeric ID, like seen).
-            for (k in iseen) {
-                haschild = 0
-                for (j in iseen)
-                    if (j != k && index(j, k ".") == 1) { haschild = 1; break }
-                # an indented child (flat-list violation) still counts as
-                # a child: the flat-list error already flags it, the
-                # group/leaf consistency must not pile a second,
-                # misleading finding on top.
-                if (!haschild)
-                    for (j in iindented)
-                        if (index(j, k ".") == 1) { haschild = 1; break }
-                if (iseen[k] == ":" && !haschild)
-                    err(iln[k], "group ID I" substr(k, 2) " has no children")
-                if (iseen[k] == "." && haschild)
-                    err(iln[k], "leaf ID I" substr(k, 2) " has children - a group line ends with a colon")
-                if (iseen[k] != "." && iseen[k] != ":")
-                    err(iln[k], "implementation line I" substr(k, 2) " must end with . (leaf) or : (group)")
-                p = k
-                while (sub(/\.[0-9]+$/, "", p) > 0 && p != "") {
-                    if (!(p in iseen)) {
-                        err(iln[k], "ancestor ID I" substr(p, 2) " of I" substr(k, 2) " is missing")
-                        break
-                    }
-                    if (iseen[p] == ".")
-                        err(iln[p], "ancestor ID I" substr(p, 2) " of I" substr(k, 2) " is a leaf, must be a group (:)")
-                }
-            }
-            exit bad ? 2 : (warned ? 1 : 0)
-        }
-    ' "$1"
-    rc=$?
-    if [ "$rc" -gt "$fail" ]; then fail=$rc; fi
-}
+@dataclass
+class Entry:
+    family: str
+    number: str
+    line: int
+    section: str
+    text: str
+    indent: int
+    @property
+    def id(self) -> str:
+        return f"{self.family}{self.number}"
+def section_name(heading: str) -> str:
+    # The first alphabetic word is the section key; case is significant only by canonicalization.
+    m = re.search(r"[A-Za-z]+", heading)
+    if not m:
+        return ""
+    word = m.group(0)
+    known = {s.lower(): s for s in (set(RECORD_SECTIONS) | {"Overview", "Scope", "Definitions", "Interface", "Configuration", "Dependencies", "Used by", "Usage constraints", "Error handling"})}
+    return known.get(word.lower(), word)
 
-lint_index() {
-    idxdir=$(dirname "$1")
-    root=$(git -C "$idxdir" rev-parse --show-toplevel 2>/dev/null) || root=
-    if [ -z "$root" ]; then
-        if [ "$(basename "$idxdir")" = "specs" ]; then
-            root=$(dirname "$idxdir")
-        else
-            root="$idxdir"
-        fi
-    fi
-    awk -v idxdir="$idxdir" -v root="$root" '
-        function trim(s) { gsub(/^[ \t]+|[ \t]+$/, "", s); return s }
-        function err(nr, m) {
-            printf "%s:%d: %s\n", FILENAME, nr, m > "/dev/stderr"
-            bad = 1
-        }
-        /^\|/ {
-            if ($0 ~ /^\|[ \t]*-+/) next
-            n = split($0, f, "|")
-            if (n < 5) next
-            for (i = 2; i <= 4; i++) f[i] = trim(f[i])
-            path = f[2]; ref = f[3]; st = f[4]
-            if (path == "Path" || path == "") next
-            if (system("test -e \"" root "/" path "\"") != 0 && system("test -e \"" idxdir "/" path "\"") != 0)
-                err(NR, "index row path does not exist (tried " root "/" path " and " idxdir "/" path "): " path)
-            if (st != "draft" && st != "stable")
-                err(NR, "Status must be draft or stable, got: " st)
-            if (ref !~ /^[a-z0-9]+(-[a-z0-9]+)*$/)
-                err(NR, "Reference must be a lowercase hyphen-separated ID: " ref)
-            else if (ref in refs)
-                err(NR, "duplicate Reference: " ref)
-            refs[ref] = 1
-            print ref
-        }
-        END { exit bad ? 2 : 0 }
-    ' "$1" >> "$refsrc"
-    rc=$?
-    if [ "$rc" -gt "$fail" ]; then fail=$rc; fi
-}
 
-lint_glossary() {
-    if [ -s "$refsrc" ]; then
-        checkrefs=1
-    else
-        checkrefs=0
-        printf 'speclint: %s: warning: no index references collected (lint an index.md first); prefix resolution skipped\n' "$1" >&2
-    fi
-    awk -v REFFILE="$refsrc" -v CHECKREFS="$checkrefs" '
-        function trim(s) { gsub(/^[ \t]+|[ \t]+$/, "", s); return s }
-        function err(nr, m) {
-            printf "%s:%d: %s\n", FILENAME, nr, m > "/dev/stderr"
-            bad = 1
-        }
-        BEGIN {
-            while ((getline l < REFFILE) > 0) { sub(/\n$/, "", l); refs[l] = 1 }
-            close(REFFILE)
-            prev = ""
-        }
-        /^\|/ {
-            if ($0 ~ /^\|[ \t]*-+/) next
-            n = split($0, f, "|")
-            if (n < 4) next
-            for (i = 2; i <= 4; i++) f[i] = trim(f[i])
-            term = f[2]; def = f[3]; where = f[4]
-            if (term == "Term" || term == "") next
-            # Form: the structure <reference>/<term> only — exactly
-            # one slash, both parts non-empty. Case and alphabet
-            # belong to the language check below; one finding of one
-            # class per row: a form error is reported alone and the
-            # row goes no further.
-            if (term !~ /^[^/]+\/[^/]+$/) {
-                err(NR, "term ID must be lowercase <reference>/<term>: " term)
-                next
-            }
-            # Language: strictly English — both parts lowercase ASCII
-            # letters, digits, hyphens. Any non-ASCII letter (Cyrillic
-            # or any other alphabet — anything outside printable
-            # ASCII) or any uppercase letter in either part of a
-            # structurally valid ID is a language error; the row goes
-            # no further either. Covers GLOSSARY.md rows only —
-            # term-ID language in spec texts is not scanned
-            # (semantic pass, review).
-            if (term ~ /[A-Z]/ || term ~ /[^ -~]/) {
-                err(NR, "term ID must be strictly English (" term ")")
-                next
-            }
-            if (prev != "" && term < prev)
-                err(NR, "glossary not alphabetical: " term " after " prev)
-            prev = term
-            split(term, pp, "/")
-            if (where != pp[1] && where !~ ("^" pp[1] " \\([A-Za-z0-9., -]+\\)$"))
-                err(NR, "Defined in must equal the term prefix " pp[1] " (optionally with requirement IDs), got: " where)
-            if (CHECKREFS == 1 && !(pp[1] in refs))
-                err(NR, "term prefix " pp[1] " resolves to no index reference")
-        }
-        END { exit bad ? 2 : 0 }
-    ' "$1"
-    rc=$?
-    # A glossary linted without collected references emits a warning;
-    # warnings alone yield exit 1 (the documented 0/1/2 contract).
-    if [ "$checkrefs" -eq 0 ] && [ "$rc" -eq 0 ]; then
-        rc=1
-    fi
-    if [ "$rc" -gt "$fail" ]; then fail=$rc; fi
-}
+def read_markdown(path: Path) -> tuple[list[str], list[bool]]:
+    text = path.read_text(encoding="utf-8-sig")
+    lines = text.splitlines()
+    in_fence = False
+    fenced: list[bool] = []
+    for line in lines:
+        # Fence starts only in column zero. Closing marker may use a different character/length.
+        stripped = line
+        match = re.match(r"^(`{3,}|~{3,})(.*)$", stripped)
+        if not in_fence and match:
+            in_fence = True
+            fenced.append(True)
+            continue
+        if in_fence:
+            fenced.append(True)
+            close = re.match(r"^(`{3,}|~{3,})\s*$", stripped)
+            if close:
+                in_fence = False
+            continue
+        fenced.append(False)
+    return lines, fenced
 
-for arg in "$@"; do
-    if [ -d "$arg" ]; then
-        find "$arg" -name index.md -type f | LC_ALL=C sort > "$filelist"
-        while IFS= read -r f; do lint_index "$f"; done < "$filelist"
-        find "$arg" -name GLOSSARY.md -type f | LC_ALL=C sort > "$filelist"
-        while IFS= read -r f; do lint_glossary "$f"; done < "$filelist"
-        find "$arg" -name '*.md' ! -name index.md ! -name GLOSSARY.md -type f | LC_ALL=C sort > "$filelist"
-        while IFS= read -r f; do lint_spec "$f"; done < "$filelist"
-    elif [ -f "$arg" ]; then
-        case $(basename "$arg") in
-            index.md)
-                lint_index "$arg"
-                ;;
-            GLOSSARY.md)
-                d=$(dirname "$arg")
-                if [ ! -s "$refsrc" ] && [ -f "$d/index.md" ]; then
-                    lint_index "$d/index.md"
-                fi
-                lint_glossary "$arg"
-                ;;
-            *.md)
-                lint_spec "$arg"
-                ;;
-            *)
-                printf 'speclint: %s: not a .md file\n' "$arg" >&2
-                fail=2
-                ;;
-        esac
-    else
-        printf 'speclint: %s: no such file or directory\n' "$arg" >&2
-        fail=2
-    fi
-done
 
-exit "$fail"
+def scan_spec(path: Path) -> list[Finding]:
+    findings: list[Finding] = []
+    try:
+        lines, fenced = read_markdown(path)
+    except (OSError, UnicodeError) as exc:
+        return [Finding(path, 1, f"cannot read Markdown file: {exc}")]
+
+    sections: list[str] = [""] * len(lines)
+    current = ""
+    for i, line in enumerate(lines):
+        if not fenced[i]:
+            hm = re.match(r"^ {0,3}#{1,6}\s+(.+?)\s*#*\s*$", line)
+            if hm:
+                current = section_name(hm.group(1))
+        sections[i] = current
+
+    entries: list[Entry] = []
+    seen: dict[str, int] = {}
+    for i, line in enumerate(lines):
+        if fenced[i]:
+            continue
+        sec = sections[i]
+        # Section headings are structural, not section-content records.
+        if not fenced[i] and re.match(r"^ {0,3}#{1,6}\s+", line):
+            continue
+        # Number scanner excludes inline code and specified sections.
+        if sec not in {"Configuration", "Examples"}:
+            cleaned = INLINE_CODE_RE.sub(lambda m: " " * len(m.group(0)), line)
+            for m in NUMERIC_RE.finditer(cleaned):
+                token = m.group(0)
+                # A numeric dotted version (for example 1.2.3) is an identifier,
+                # not a decimal literal. Two-component decimals remain reportable.
+                if token.count(".") >= 2 and "," not in token and re.fullmatch(r"\d+(?:\.\d+){2,}", token):
+                    continue
+                col = m.start() + 1
+                findings.append(Finding(path, i + 1, f"bare numeric literal {token!r} outside Configuration/Examples at column {col}"))
+
+        stripped = line.lstrip(" \t")
+        indent = len(line) - len(stripped)
+        pm = PREFIX_RE.match(stripped)
+        if pm:
+            ident = pm.group(1)
+            family = ident[0]
+            number = ident[1:]
+            if sec not in RECORD_SECTIONS:
+                findings.append(Finding(path, i + 1, f"prefixed entry {ident} is outside its record section"))
+            elif FAMILIES[family] != sec:
+                findings.append(Finding(path, i + 1, f"{ident} must be in section {FAMILIES[family]}, not {sec}"))
+            if indent:
+                findings.append(Finding(path, i + 1, f"prefixed entry {ident} starts with indentation"))
+            if ident in seen:
+                findings.append(Finding(path, i + 1, f"duplicate ID {ident}; first defined on line {seen[ident]}"))
+            else:
+                seen[ident] = i + 1
+            entries.append(Entry(family, number, i + 1, sec, line[pm.end():].strip(), indent))
+        elif sec in RECORD_SECTIONS and line.strip():
+            # Every nonempty line in these sections must be a top-level prefixed record.
+            findings.append(Finding(path, i + 1, f"nonempty line in {sec} must start at column 0 with '- ' and the section's ID prefix"))
+        if indent and re.match(r"^\s+-\s+[REIVTJ]\d", line):
+            findings.append(Finding(path, i + 1, "prefixed entry is indented; Markdown nesting cannot express record hierarchy"))
+        if i > 0 and indent and sections[i] in RECORD_SECTIONS and not fenced[i] and lines[i-1].strip():
+            if PREFIX_RE.match(lines[i-1].lstrip()) and len(lines[i-1]) - len(lines[i-1].lstrip()) == 0:
+                findings.append(Finding(path, i + 1, "indented continuation after a prefixed entry is not allowed"))
+
+    ids = {e.id: e for e in entries}
+    by_family: dict[str, list[Entry]] = {}
+    for e in entries:
+        by_family.setdefault(e.family, []).append(e)
+        parts = e.number.split(".")
+        for n in range(1, len(parts)):
+            parent = e.family + ".".join(parts[:n])
+            if parent not in ids:
+                findings.append(Finding(path, e.line, f"{e.id} has missing parent {parent}"))
+    for family, family_entries in by_family.items():
+        nums = {e.number for e in family_entries}
+        for e in family_entries:
+            child_prefix = e.number + "."
+            has_child = any(n.startswith(child_prefix) for n in nums)
+            # A parent with children must end in colon; a leaf must not be a group label.
+            if has_child and not e.text.endswith(":"):
+                findings.append(Finding(path, e.line, f"group entry {e.id} must end with ':'"))
+            if not has_child and e.text.endswith(":"):
+                findings.append(Finding(path, e.line, f"leaf entry {e.id} must not end with ':'"))
+
+    # Requirement markers and Tests coverage.
+    r_entries = {e.id: e for e in entries if e.family == "R"}
+    e_entries = {e.id: e for e in entries if e.family == "E"}
+    t_entries = [e for e in entries if e.family == "T"]
+    leaf_r = [e for e in r_entries.values() if not any(x.number.startswith(e.number + ".") for x in r_entries.values())]
+    leaf_t = [e for e in t_entries if not any(x.number.startswith(e.number + ".") for x in t_entries)]
+    for e in e_entries.values():
+        rid = "R" + e.number
+        if rid not in r_entries:
+            findings.append(Finding(path, e.line, f"{e.id} must mirror an existing {rid}"))
+    for r in leaf_r:
+        vals = re.findall(r"(?:^|\s)verification=([A-Za-z_-]+)", r.text)
+        if len(vals) != 1 or vals[0] not in ALLOWED_VERIFICATION:
+            findings.append(Finding(path, r.line, f"leaf {r.id} must contain exactly one verification marker with value one of {', '.join(sorted(ALLOWED_VERIFICATION))}"))
+    t_refs: dict[str, list[Entry]] = {}
+    for t in leaf_t:
+        refs_match = re.search(r"(?:^|\s)R-ID=([^;]+)", t.text)
+        if not refs_match:
+            findings.append(Finding(path, t.line, f"leaf {t.id} must identify checked requirements with R-ID=..."))
+            continue
+        refs = [x.strip() for x in refs_match.group(1).split(",") if x.strip()]
+        for rid in refs:
+            if rid not in r_entries:
+                findings.append(Finding(path, t.line, f"{t.id} references nonexistent {rid}"))
+            elif any(x.number.startswith(r_entries[rid].number + ".") for x in r_entries.values()):
+                findings.append(Finding(path, t.line, f"{t.id} may reference only leaf R-ID; {rid} is a group"))
+            else:
+                markers = re.findall(r"(?:^|\s)verification=([A-Za-z_-]+)", r_entries[rid].text)
+                if len(markers) != 1 or markers[0] not in {"automated", "scenario"}:
+                    findings.append(Finding(path, t.line, f"{t.id} may reference only R-ID with verification=automated or verification=scenario; {rid} does not qualify"))
+                else:
+                    t_refs.setdefault(rid, []).append(t)
+        for field in ("conditions=", "expected="):
+            if field not in t.text:
+                findings.append(Finding(path, t.line, f"leaf {t.id} must contain {field[:-1]} field"))
+    for r in leaf_r:
+        vals = re.findall(r"(?:^|\s)verification=([A-Za-z_-]+)", r.text)
+        if vals and vals[0] in {"automated", "scenario"} and r.id not in t_refs:
+            findings.append(Finding(path, r.line, f"{r.id} with verification={vals[0]} must be referenced by at least one leaf T-ID"))
+    return findings
+
+
+def parse_fields(text: str) -> dict[str, str]:
+    """Parse index/glossary fields in plain, bold, or backtick Markdown forms."""
+    field_re = re.compile(
+        r"(?<![A-Za-z])(?P<key>Defined in|Path|Reference|Status|Summary)"
+        r"(?:\*\*|`)?\s*:\s*(?:\*\*|`)?",
+        re.I,
+    )
+    matches = list(field_re.finditer(text))
+    result: dict[str, str] = {}
+    for index, match in enumerate(matches):
+        key = match.group("key").lower()
+        end = matches[index + 1].start() if index + 1 < len(matches) else len(text)
+        value = text[match.end():end].strip()
+        value = re.sub(r"(?:\*\*|`)+$", "", value).strip()
+        value = value.rstrip(".;")
+        if value:
+            result[key] = value
+    return result
+
+
+def repo_root(path: Path) -> Path | None:
+    try:
+        p = path.resolve()
+        for parent in (p.parent, *p.parents):
+            if (parent / ".git").exists():
+                return parent
+        cp = subprocess.run(["git", "-C", str(path.parent), "rev-parse", "--show-toplevel"], capture_output=True, text=True, timeout=2)
+        if cp.returncode == 0 and cp.stdout.strip():
+            return Path(cp.stdout.strip()).resolve()
+    except (OSError, subprocess.SubprocessError):
+        pass
+    return None
+
+
+def scan_index(path: Path) -> list[Finding]:
+    findings: list[Finding] = []
+    try:
+        lines = path.read_text(encoding="utf-8-sig").splitlines()
+    except (OSError, UnicodeError) as exc:
+        return [Finding(path, 1, f"cannot read index: {exc}")]
+    root = repo_root(path)
+    specs_dir = next((p for p in (path.parent, *path.parents) if p.name == "specs"), None)
+    base = root or (specs_dir.parent if specs_dir else path.parent)
+    blocks: list[tuple[int, str]] = []
+    start, buf, in_fence = 0, [], False
+    for i, line in enumerate(lines, 1):
+        if re.match(r"^(`{3,}|~{3,})", line):
+            in_fence = not in_fence
+            continue
+        if in_fence:
+            continue
+        if line.strip() and (line.startswith("- ") or line.startswith("## ") or line.startswith("### ")):
+            if buf:
+                blocks.append((start, " ".join(buf)))
+            start, buf = i, [line]
+        elif line.strip():
+            if not buf:
+                start = i
+            buf.append(line.strip())
+        elif buf:
+            blocks.append((start, " ".join(buf)))
+            buf = []
+    if buf:
+        blocks.append((start, " ".join(buf)))
+    for line_no, block in blocks:
+        # A top-level list item is an index entry even when its Path field is missing.
+        if not block.lstrip().startswith("- "):
+            continue
+        fields = parse_fields(block)
+        for required in ("path", "reference", "status", "summary"):
+            if not fields.get(required):
+                findings.append(Finding(path, line_no, f"index entry missing required field {required.title()}"))
+        status = fields.get("status", "").strip(" `*_ ")
+        if status and status not in {"draft", "stable"}:
+            findings.append(Finding(path, line_no, f"invalid Status {status!r}; expected draft or stable"))
+        ref = fields.get("reference", "").strip(" `*_ ")
+        if ref and not re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", ref):
+            findings.append(Finding(path, line_no, f"invalid Reference {ref!r}; expected lowercase ASCII letters/digits separated by single hyphens"))
+        value = fields.get("path", "").strip(" `*_ ")
+        if value:
+            target = (base / value).resolve()
+            if not target.exists():
+                findings.append(Finding(path, line_no, f"index Path does not exist: {value}"))
+    return findings
+
+
+def scan_glossary(path: Path, reference_ids: set[str] | None) -> list[Finding]:
+    findings: list[Finding] = []
+    try:
+        lines = path.read_text(encoding="utf-8-sig").splitlines()
+    except (OSError, UnicodeError) as exc:
+        return [Finding(path, 1, f"cannot read glossary: {exc}")]
+    entries: list[tuple[int, str, str]] = []
+    for i, line in enumerate(lines, 1):
+        if not line.strip() or line.lstrip().startswith("#"):
+            continue
+        # A glossary term entry is a top-level list item with a term ID.
+        m = re.match(r"^-\s+([A-Za-z][A-Za-z0-9-]*)\s*[:—-]\s*(.*)$", line)
+        if not m:
+            if re.match(r"^-\s+", line):
+                findings.append(Finding(path, i, "glossary entry must begin with an English-alphabet term ID followed by ':' or a dash"))
+            continue
+        term_id, body = m.group(1), m.group(2)
+        if not term_id.isascii() or not term_id.isalpha() and not re.fullmatch(r"[A-Za-z][A-Za-z0-9-]*", term_id):
+            findings.append(Finding(path, i, f"invalid glossary term ID {term_id!r}"))
+        entries.append((i, term_id, body))
+        defined = re.search(r"(?:\*\*|`)?Defined in(?:\*\*|`)?\s*:\s*([A-Za-z0-9-]+)", body, re.I)
+        if not defined:
+            findings.append(Finding(path, i, "glossary entry missing Defined in field"))
+        elif reference_ids is not None:
+            prefix = defined.group(1)
+            if not any(ref == prefix or ref.startswith(prefix + "-") for ref in reference_ids):
+                findings.append(Finding(path, i, f"Defined in prefix {prefix!r} does not resolve to an index Reference ID"))
+    ids = [term for _, term, _ in entries]
+    if ids != sorted(ids, key=str.casefold):
+        for line_no, _, _ in entries:
+            findings.append(Finding(path, line_no, "glossary term IDs are not sorted alphabetically"))
+            break
+    return findings
+
+
+def discover(paths: Iterable[Path]) -> tuple[list[Path], list[Finding]]:
+    files: set[Path] = set()
+    errors: list[Finding] = []
+    for path in paths:
+        if not path.exists():
+            errors.append(Finding(path, 1, "path does not exist"))
+            continue
+        if path.is_file():
+            if path.suffix != ".md":
+                errors.append(Finding(path, 1, "file path must have .md extension"))
+            else:
+                files.add(path.resolve())
+        elif path.is_dir():
+            try:
+                files.update(p.resolve() for p in path.rglob("*") if p.is_file() and p.suffix == ".md")
+            except OSError as exc:
+                errors.append(Finding(path, 1, f"cannot traverse directory: {exc}"))
+        else:
+            errors.append(Finding(path, 1, "path must be a Markdown file or directory"))
+    ordered = sorted(files, key=lambda p: (0 if p.name == "index.md" else 1 if p.name == "GLOSSARY.md" else 2, str(p)))
+    return ordered, errors
+
+
+def collect_reference_ids(files: list[Path]) -> tuple[set[str] | None, list[Finding]]:
+    refs: set[str] = set()
+    indexes = [p for p in files if p.name == "index.md"]
+    if not indexes:
+        return None, []
+    for p in indexes:
+        try:
+            text = p.read_text(encoding="utf-8-sig")
+        except (OSError, UnicodeError):
+            continue
+        for m in re.finditer(r"(?:\*\*|`)?Reference(?:\*\*|`)?\s*:\s*([a-z0-9]+(?:-[a-z0-9]+)*)", text):
+            refs.add(m.group(1))
+    return (refs if refs else None), []
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(prog="speclint.py", description="Mechanically lint Markdown specifications, indexes, and glossaries.")
+    parser.add_argument("path", nargs="*", help="Markdown file or directory (recursive)")
+    args = parser.parse_args(argv)
+    if not args.path:
+        print("speclint: error: at least one path is required", file=sys.stderr)
+        return ERROR
+    files, findings = discover(Path(p) for p in args.path)
+    if not files and not findings:
+        findings.append(Finding(Path(args.path[0]), 1, "no Markdown files found"))
+    refs, _ = collect_reference_ids(files)
+    for path in files:
+        if path.name == "index.md":
+            findings.extend(scan_index(path))
+        elif path.name == "GLOSSARY.md":
+            if refs is None:
+                findings.append(Finding(path, 1, "Reference IDs could not be collected; glossary prefix-resolution check skipped", True))
+            findings.extend(scan_glossary(path, refs))
+        else:
+            findings.extend(scan_spec(path))
+    errors = [f for f in findings if not f.warning]
+    warnings = [f for f in findings if f.warning]
+    for f in sorted(findings, key=lambda x: (str(x.path), x.line, x.warning, x.message)):
+        if f.warning:
+            print(f"speclint: warning: {f.path}:{f.line}: {f.message}", file=sys.stderr)
+        else:
+            print(f"{f.path}:{f.line}: {f.message}", file=sys.stderr)
+    if errors:
+        return ERROR
+    if warnings:
+        return WARNING
+    return CLEAN
+
+if __name__ == "__main__":
+    raise SystemExit(main())
