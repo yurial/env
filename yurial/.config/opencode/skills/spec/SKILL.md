@@ -7,7 +7,7 @@ description: Create, review, and maintain project specifications; enforce spec-f
 
 ## Purpose
 
-Use this skill to author and review project specifications, align related contracts, check code against specifications, and implement approved requirements. `speclint` checks mechanical properties; semantic properties require a separate semantic pass and review.
+Use this skill to author and review project specifications, align related contracts, check code against specifications, and implement approved requirements. `speclint.py` checks mechanical properties; semantic properties require a separate semantic pass and review.
 
 ## When to use
 
@@ -112,7 +112,7 @@ Each `Configuration` entry is keyed by name and specifies its type and effect. F
 
 After every spec change:
 
-1. Run `speclint` first on the changed spec or relevant directory.
+1. Run `speclint.py` first on the changed spec or relevant directory.
 2. Perform a separate semantic pass on the changed spec and related specs.
 3. Report mechanical-check results and semantic-review results separately.
 4. After changing a requirement, verify that the associated `Verification` entry is still current; update or remove stale entries.
@@ -121,9 +121,9 @@ The semantic pass checks requirement clarity, testability and atomicity; cross-s
 
 Do not claim that mechanical lint proves semantic correctness. Report checks not performed separately and do not claim full conformance while required checks have not been performed or known discrepancies remain open.
 
-## `speclint` contract
+## `speclint.py` contract
 
-Use `speclint <path>...` to check one or more Markdown files or directories. At least one path is required. A missing argument, nonexistent path, or existing file whose extension is not `.md` produces a diagnostic on `stderr` and returns `speclint-error-exit-code`.
+Use `speclint.py <path>...` to check one or more Markdown files or directories. At least one path is required. A missing argument, nonexistent path, or existing file whose extension is not `.md` produces a diagnostic on `stderr` and returns `speclint-error-exit-code`.
 
 When checking a directory, process all `index.md` files recursively in sorted order first, then all `GLOSSARY.md` files, then the remaining `.md` files in sorted order. Determine file type by basename: `index.md` is an index, `GLOSSARY.md` is a glossary, and every other `.md` file is a spec. In directory mode, every `.md` file is a candidate. Apply checks to recognized prefixed entries and to numeric literals outside excluded areas.
 
@@ -135,14 +135,14 @@ The mechanical checks include all of the following:
 - Report a prefixed entry that begins with indentation or continues on a following indented line.
 - Prohibit bare numeric literals outside `Configuration`, `Examples`, backticks, and recognized fenced code blocks. Recognize integers and decimals, decimal separators using a dot or comma, and numeric tokens with alphabetic suffixes when the token begins with a number. Do not treat digits inside identifiers, versions, TLS-like tokens, or tokens beginning with a letter as bare numeric literals.
 - Recognize fenced code blocks only when the fence marker begins in column zero. Skip their lines. The closing marker does not need to match the opening marker's character or length. If no closing marker occurs, treat all following lines through end of file as part of the block for numeric scanning and section switching. Headings inside a recognized block do not change the scanner's section; a heading outside a block determines the section by the first alphabetic word in the heading.
-- For indexes, validate compliance with the document-format and content requirements in the source specification (especially R2.7–R2.10): check the required table header and column order, required cells, `Status`, `Reference`, and path existence. These are document-authoring rules defined by the source specification; `speclint` only checks compliance with them. Resolve index paths relative to the Git repository root, or, if that root cannot be determined, relative to the parent directory of `specs/` or the index directory itself.
-- For glossaries, validate compliance with the document-format and content requirements in the source specification (especially R6.3–R6.5): check the required table header and column order, required cells, term-ID format, use of the English alphabet, alphabetical sorting, and the `Defined in` field format. These are document-authoring rules defined by the source specification; `speclint` only checks compliance with them. Resolve term-ID prefixes against `Reference` IDs collected from indexes. If no `Reference` IDs were collected, skip only prefix-resolution checking and emit a warning.
+- For indexes, validate compliance with the document-format and content requirements in the source specification (especially R2.7–R2.10): check the required table header and column order, required cells, `Status`, `Reference`, and path existence. These are document-authoring rules defined by the source specification; `speclint.py` only checks compliance with them. Resolve index paths relative to the Git repository root, or, if that root cannot be determined, relative to the parent directory of `specs/` or the index directory itself.
+- For glossaries, validate compliance with the document-format and content requirements in the source specification (especially R6.3–R6.5): check the required table header and column order, required cells, term-ID format, use of the English alphabet, alphabetical sorting, and the `Defined in` field format. These are document-authoring rules defined by the source specification; `speclint.py` only checks compliance with them. Resolve term-ID prefixes against `Reference` IDs collected from indexes. If no `Reference` IDs were collected, skip only prefix-resolution checking and emit a warning.
 - Check that every leaf `R-ID` has exactly one `verification` marker and that its value is one of `automated`, `scenario`, `manual`, or `analysis`.
 - Check that every leaf `R-ID` marked `automated` or `scenario` is referenced by at least one leaf entry in `Tests`. `manual` and `analysis` requirements do not need a `T-ID`. Missing required coverage is an error. A present reference does not prove that the test procedure is semantically sufficient.
 
 Write findings to `stderr` in the format `<file>:<line>: <message>`. Warnings must have the prefix `speclint: warning:`. Return `speclint-clean-exit-code` when there are no findings, `speclint-warning-exit-code` when warnings occur without errors, and `speclint-error-exit-code` when errors occur. These are fixed configuration entries: `speclint-clean-exit-code` is `0`, `speclint-warning-exit-code` is `1`, and `speclint-error-exit-code` is `2`.
 
-Do not describe semantic checks as capabilities of `speclint` unless the script mechanically performs them. Document and account for line-by-line scanner limitations during review, including its inability to detect unindented continuations and its fenced-code-block recognition behavior. Mechanical checking does not establish requirement clarity, atomicity, semantic completeness of configuration, truth of `Verification`, semantic justification of relationships, or language quality. Prefix-resolution warnings skip only that resolution check, not the rest of linting.
+Do not describe semantic checks as capabilities of `speclint.py` unless the script mechanically performs them. Document and account for line-by-line scanner limitations during review, including its inability to detect unindented continuations and its fenced-code-block recognition behavior. Mechanical checking does not establish requirement clarity, atomicity, semantic completeness of configuration, truth of `Verification`, semantic justification of relationships, or language quality. Prefix-resolution warnings skip only that resolution check, not the rest of linting.
 
 ## Open deviations
 
@@ -170,7 +170,7 @@ Do not begin implementation of a significant change until the spec, plan, and ta
 
 For significant implementation work, maintain the traceability chain `Requirement ID → Task → Test ID / verification evidence → Implementation`. After implementation, run prescribed checks, compare each affected requirement with actual behavior, check test quality, and update `Tests` and `Verification`.
 
-When changing these skill instructions, check consistency across affected requirements, section structure, `Interface`, `Configuration`, `speclint`, its tests, and the documented limits of mechanical checking.
+When changing these skill instructions, check consistency across affected requirements, section structure, `Interface`, `Configuration`, `speclint.py`, its tests, and the documented limits of mechanical checking.
 
 ## Review and final report
 
@@ -186,7 +186,7 @@ Review should report:
 - undocumented `Interface` values, missing `Configuration` entries, incorrect use of `fixed` and `magic`, raw numeric values where names are required, and private implementation details presented as external requirements;
 - incomplete or stale `Verification`, including overclaims based on limited TLC runs.
 
-The final report lists changed specs and affected IDs, related artifacts, results of `speclint`, semantic review and tests, plus unchecked requirements, assumptions, risks, and open deviations. State explicitly which checks were not performed.
+The final report lists changed specs and affected IDs, related artifacts, results of `speclint.py`, semantic review and tests, plus unchecked requirements, assumptions, risks, and open deviations. State explicitly which checks were not performed.
 
 ## Mandatory specification-compliance gate
 
@@ -198,7 +198,7 @@ Use this order for every specification change:
 2. **Structure and normative content.** Apply R3 and R4: validate the heading, status and source-of-truth line; use only permitted sections; put independent obligations only in `Requirements`; define public behavior observably; keep internal implementation notes non-normative; follow the ID, one-line entry, verification-marker, example, and test rules.
 3. **Interfaces and configuration.** Apply R5: document every public name, signature, type, domain, output and error code; repeat mandatory interface behavior in `Requirements`; define every parameter, constant and magic number with the correct fields and labels; link behavioral consequences to active `R-ID`s and use names instead of numeric values in requirements.
 4. **Terms and relationships.** Apply R6: validate the glossary table header and rows, full term IDs, definitions, sorting and `Defined in`; add new terms to the glossary in the same change where applicable; reuse owner IDs without redefining terms; use `Reference` rather than paths; synchronize both sides of each dependency; check language and anglicisms.
-5. **Mechanical check, then semantic check.** Apply R7 and R8: run `speclint` first, then separately review the changed spec and related specs. Use the complete `speclint` contract above. Re-check the associated `Verification` whenever a requirement changes. Report the two check types separately and never equate lint success with semantic correctness.
+5. **Mechanical check, then semantic check.** Apply R7 and R8: run `speclint.py` first, then separately review the changed spec and related specs. Use the complete `speclint.py` contract above. Re-check the associated `Verification` whenever a requirement changes. Report the two check types separately and never equate lint success with semantic correctness.
 6. **Deviation accounting.** Apply R7.5–R7.15: record only confirmed open discrepancies; use one stable `D-ID` per discrepancy and all required fields; append without renumbering; supersede corrected entries correctly; close only when code, tests and review establish conformance; keep implementation artifacts tied to normative `R-ID`s.
 7. **Planning and implementation.** Apply R9: perform Scope Check for multi-capability initiatives; inspect boundaries, interfaces, dependencies, terms, normal and edge scenarios, errors and success criteria; follow the checkpoint order and approval gate; record plan and task details; preserve requirement-to-task-to-test-to-implementation traceability; run prescribed checks and update `Tests` and `Verification` after implementation.
 8. **Review and report.** Apply R10: check cross-spec contradictions, contract drift, duplicate normative rules, identifiers and configuration consistency, glossary and relationship integrity, requirement quality, interface/configuration completeness, and `Verification` claims. Report changed specs and affected IDs, related artifacts, mechanical results, semantic results, tests, unchecked requirements, assumptions, risks and open deviations.
@@ -228,7 +228,7 @@ Use this index as a final coverage sweep against the current source `SPEC.md`. I
 - `R5.1–R5.8`: complete interface and configuration contracts, correct parameter/constant/magic-number fields, links to active requirements — `Interface and configuration`.
 - `R6.1–R6.13`: term IDs, glossary, owner terms, dependencies, mirrored relationships, language — `Terms and relationships between specs`.
 - `R7.1–R7.15`: lint-first order, semantic pass, current Verification, deviation lifecycle and traceability — `Mechanical and semantic checks`, `Open deviations`.
-- `R8.1–R8.27`: complete CLI, ordering, scanner, index/glossary checks, diagnostics, exit codes, limitations and test coverage — `speclint contract`.
+- `R8.1–R8.27`: complete CLI, ordering, scanner, index/glossary checks, diagnostics, exit codes, limitations and test coverage — `speclint.py` contract.
 - `R9.1–R9.20`: Scope Check, approval checkpoints, plan/tasks, decomposition, traceability and implementation verification — `Planning and implementation`.
 - `R10.1–R10.13`: semantic review and final-report findings — `Review and final report`.
 

@@ -5,7 +5,7 @@ Spec source of truth for: OpenCode `spec` skill — authoring project specificat
 
 ## Overview
 
-The `spec` skill defines the process for creating and reviewing project specifications, aligning related contracts, checking code against specifications, and implementing approved requirements. `speclint` performs mechanical format checks; substantive properties are checked through a semantic pass and review.
+The `spec` skill defines the process for creating and reviewing project specifications, aligning related contracts, checking code against specifications, and implementing approved requirements. `speclint.py` performs mechanical format checks; substantive properties are checked through a semantic pass and review.
 
 ## Scope
 
@@ -21,7 +21,7 @@ The `spec` skill defines the process for creating and reviewing project specific
 
 ## Interface
 
-- `speclint <path>...` — runs mechanical checks on one or more Markdown files or directories.
+- `speclint.py <path>...` — runs mechanical checks on one or more Markdown files or directories.
 - `path` — a path to a Markdown file or directory.
 - Allowed spec and index statuses: `draft`, `stable`.
 - Allowed prefixed-entry families: `R`, `E`, `I`, `V`, `T`, `J`; deviation entries use `D-ID`.
@@ -128,7 +128,7 @@ The `spec` skill defines the process for creating and reviewing project specific
 - R6.13. verification=manual; Non-English prose does not use undocumented anglicisms, except full term IDs, identifiers and code literals, CLI verbs, and configuration keys.
 
 - R7. Checks and deviations:
-- R7.1. verification=scenario; After every spec change, the agent first runs `speclint` and then performs a semantic pass on the changed spec and related specs.
+- R7.1. verification=scenario; After every spec change, the agent first runs `speclint.py` and then performs a semantic pass on the changed spec and related specs.
 - R7.2. verification=scenario; Mechanical checks and the semantic pass are reported separately.
 - R7.3. verification=analysis; The semantic pass checks requirement clarity and testability, behavioral atomicity, relationship correctness, `Configuration` completeness, language and terminology, and the substance of `Verification`.
 - R7.4. verification=scenario; After changing a requirement, the agent checks whether the associated `Verification` is still current and updates or removes a stale entry.
@@ -144,34 +144,34 @@ The `spec` skill defines the process for creating and reviewing project specific
 - R7.14. verification=manual; When behavior without a normative basis is found, review reports it as a spec gap or a bug.
 - R7.15. verification=manual; A deviation review checks every item in `Review focus` before approval.
 
-- R8. Mechanical-check contract for `speclint`:
-- R8.1. verification=automated; `speclint` accepts at least one path to a Markdown file or directory.
+- R8. Mechanical-check contract for `speclint.py`:
+- R8.1. verification=automated; `speclint.py` accepts at least one path to a Markdown file or directory.
 - R8.2. verification=automated; A missing path, nonexistent path, or path to a non-`.md` file produces a message on `stderr` and `speclint-error-exit-code`.
-- R8.3. verification=automated; When linting a directory, `speclint` recursively processes all `index.md` files in sorted order first, then `GLOSSARY.md`, then the remaining `.md` files in sorted order.
+- R8.3. verification=automated; When linting a directory, `speclint.py` recursively processes all `index.md` files in sorted order first, then `GLOSSARY.md`, then the remaining `.md` files in sorted order.
 - R8.4. verification=automated; File type is determined by basename: `index.md` is checked as an index, `GLOSSARY.md` as a glossary, and any other `.md` file as a spec.
 - R8.5. verification=automated; In directory mode, all `.md` files are candidates for checking; checks apply to recognized prefixed entries and numeric literals outside excluded areas.
-- R8.6. verification=automated; `speclint` checks syntax and uniqueness of R-, E-, I-, V-, T-, and J-IDs within a file, the presence of ancestors, valid group and leaf entries, and the absence of groups without children.
-- R8.7. verification=automated; `speclint` checks that E-IDs mirror existing R-IDs, that `Tests` entries reference only existing leaf R-IDs with `verification=automated` or `verification=scenario`, and that prefixed entries occupy one line.
-- R8.8. verification=automated; `speclint` checks that every non-empty content line in `Requirements`, `Examples`, `Implementation`, `Verification`, `Tests`, and `Justification` begins in column zero with `- ` immediately followed by an ID with the section's corresponding prefix, for both group and leaf entries; a missing marker, missing ID, or section-inappropriate prefix is reported.
-- R8.9. verification=automated; `speclint` reports a prefixed entry that begins with indentation or continues on the next indented line.
-- R8.10. verification=automated; `speclint` prohibits bare numeric literals outside `Configuration`, `Examples`, backticks, and recognized fenced code blocks.
+- R8.6. verification=automated; `speclint.py` checks syntax and uniqueness of R-, E-, I-, V-, T-, and J-IDs within a file, the presence of ancestors, valid group and leaf entries, and the absence of groups without children.
+- R8.7. verification=automated; `speclint.py` checks that E-IDs mirror existing R-IDs, that `Tests` entries reference only existing leaf R-IDs with `verification=automated` or `verification=scenario`, and that prefixed entries occupy one line.
+- R8.8. verification=automated; `speclint.py` checks that every non-empty content line in `Requirements`, `Examples`, `Implementation`, `Verification`, `Tests`, and `Justification` begins in column zero with `- ` immediately followed by an ID with the section's corresponding prefix, for both group and leaf entries; a missing marker, missing ID, or section-inappropriate prefix is reported.
+- R8.9. verification=automated; `speclint.py` reports a prefixed entry that begins with indentation or continues on the next indented line.
+- R8.10. verification=automated; `speclint.py` prohibits bare numeric literals outside `Configuration`, `Examples`, backticks, and recognized fenced code blocks.
 - R8.11. verification=automated; The numeric scanner recognizes integers and decimals, decimal separators using a dot or comma, and numeric tokens with alphabetic suffixes when the token begins with a number.
 - R8.12. verification=automated; The numeric scanner does not treat digits inside identifiers, versions, TLS-like tokens, or tokens beginning with a letter as bare numeric literals.
 - R8.13. verification=automated; Fenced code blocks are recognized from a marker in column zero and their lines are skipped; the closing marker is not required to match the opening marker's character or length.
 - R8.14. verification=automated; If a fenced code block is not closed, all following lines through end of file are treated as part of the block for numeric scanning and section switching.
 - R8.15. verification=automated; A heading inside a recognized fenced code block does not change the scanner's section; a heading outside a block determines the section by the first alphabetic word in the heading.
-- R8.16. verification=automated; For an index, `speclint` mechanically validates compliance with the index-formatting and content requirements in R2.7–R2.10: table structure and required cells, valid `Status` and `Reference` values, and the existence of every path. R2.8 is the normative source for the table format; this rule specifies only the checks performed by the tool.
+- R8.16. verification=automated; For an index, `speclint.py` mechanically validates compliance with the index-formatting and content requirements in R2.7–R2.10: table structure and required cells, valid `Status` and `Reference` values, and the existence of every path. R2.8 is the normative source for the table format; this rule specifies only the checks performed by the tool.
 - R8.17. verification=automated; An index path is resolved relative to the Git repository root, or, if that root cannot be determined, relative to the parent directory of `specs/` or the index directory itself.
-- R8.18. verification=automated; For a glossary, `speclint` mechanically validates compliance with the glossary requirements in R6.3–R6.5: required cells, full term IDs, the `Defined in` value, and alphabetical sorting by full term ID. R6.5 is the normative source for the table format; this rule specifies only the checks performed by the tool.
+- R8.18. verification=automated; For a glossary, `speclint.py` mechanically validates compliance with the glossary requirements in R6.3–R6.5: required cells, full term IDs, the `Defined in` value, and alphabetical sorting by full term ID. R6.5 is the normative source for the table format; this rule specifies only the checks performed by the tool.
 - R8.19. verification=automated; Glossary term ID prefixes are resolved against Reference IDs collected from indexes.
 - R8.20. verification=automated; If Reference IDs have not been collected, prefix-resolution checking is skipped with a warning.
 - R8.21. verification=automated; Findings are printed to `stderr` in the format `<file>:<line>: <message>`; warnings have the `speclint:` prefix and `warning:` label.
 - R8.22. verification=automated; The exit code is `speclint-clean-exit-code` when there are no findings, `speclint-warning-exit-code` for warnings without errors, and `speclint-error-exit-code` when errors occur.
-- R8.23. verification=analysis; `speclint` documentation does not attribute semantic checks to the tool that the script does not mechanically perform.
+- R8.23. verification=analysis; `speclint.py` documentation does not attribute semantic checks to the tool that the script does not mechanically perform.
 - R8.24. verification=analysis; Limitations of the line-by-line scanner, including its inability to detect unindented continuations and its fenced-code-block recognition behavior, are documented and considered during review.
 - R8.25. verification=analysis; Mechanical checking does not establish requirement clarity, atomicity, semantic completeness of configuration, truth of `Verification`, semantic justification of relationships, or language quality.
-- R8.26. verification=automated; `speclint` checks that every leaf R-ID has exactly one `verification` marker with an allowed value of `automated`, `scenario`, `manual`, or `analysis`.
-- R8.27. verification=automated; `speclint` checks that every leaf R-ID with `verification=automated` or `verification=scenario` is referenced by at least one leaf entry in `Tests`, while R-IDs with `verification=manual` or `verification=analysis` do not require a T-ID; missing mandatory coverage is reported as an error. The presence of a reference does not establish the semantic sufficiency of the procedure.
+- R8.26. verification=automated; `speclint.py` checks that every leaf R-ID has exactly one `verification` marker with an allowed value of `automated`, `scenario`, `manual`, or `analysis`.
+- R8.27. verification=automated; `speclint.py` checks that every leaf R-ID with `verification=automated` or `verification=scenario` is referenced by at least one leaf entry in `Tests`, while R-IDs with `verification=manual` or `verification=analysis` do not require a T-ID; missing mandatory coverage is reported as an error. The presence of a reference does not establish the semantic sufficiency of the procedure.
 
 - R9. Planning and implementation:
 - R9.1. verification=manual; For a new initiative with several independently verifiable capabilities, the Scope Check is agreed upon before component specs are written.
@@ -192,7 +192,7 @@ The `spec` skill defines the process for creating and reviewing project specific
 - R9.17. verification=manual; For significant implementation work, a verifiable chain is maintained: `Requirement ID → Task → Test ID / verification evidence → Implementation`.
 - R9.18. verification=scenario; After implementation, the agent runs the prescribed checks, compares each affected requirement with the behavior, checks test quality, and updates `Tests` and `Verification`.
 - R9.19. verification=manual; Every requirement has an explicit verification method in its R-ID; no separate T-ID is needed for `verification=manual` or `verification=analysis`, while missing required coverage for `verification=automated` or `verification=scenario` is explicitly reported as a blocking finding.
-- R9.20. verification=manual; When changing the skill instructions, the agent checks consistency across affected requirements, section structure, `Interface`, `Configuration`, `speclint`, its tests, and the description of mechanical-check limitations.
+- R9.20. verification=manual; When changing the skill instructions, the agent checks consistency across affected requirements, section structure, `Interface`, `Configuration`, `speclint.py`, its tests, and the description of mechanical-check limitations.
 
 - R10. Reporting and review:
 - R10.1. verification=analysis; The semantic pass identifies direct contradictions between requirements in related specs and contract drift between an interface provider and consumer.
@@ -207,21 +207,21 @@ The `spec` skill defines the process for creating and reviewing project specific
 - R10.10. verification=analysis; Review reports compound or untestable requirements, unstable IDs, incorrect grouping, multi-line prefixed entries, Markdown-nested entries, and dangling references.
 - R10.11. verification=analysis; Review reports undocumented `Interface` values, missing `Configuration` entries, incorrect mixing of `fixed` and `magic`, citing numbers instead of names, and describing private implementation as an external requirement.
 - R10.12. verification=analysis; Review reports incomplete or stale `Verification`, including overclaims based on a limited TLC run.
-- R10.13. verification=manual; The final report lists changed specs and affected IDs, related artifacts, results of `speclint`, semantic review and tests, and unchecked requirements, assumptions, risks, and open deviations.
+- R10.13. verification=manual; The final report lists changed specs and affected IDs, related artifacts, results of `speclint.py`, semantic review and tests, and unchecked requirements, assumptions, risks, and open deviations.
 
 ## Tests
 
 - T11. Automated checks and deterministic multi-step scenarios:
-- T11.1. R-ID=R8.1,R8.2; procedure=run `speclint` without arguments, then with a path to a nonexistent object and a path to an existing file whose extension is not `.md`; conditions=run each invocation separately and record `stderr` and the exit code; expected=each invalid invocation prints a diagnostic to `stderr` and returns `speclint-error-exit-code`, while a valid Markdown path is accepted.
-- T11.2. R-ID=R8.3,R8.4,R8.5; procedure=create a temporary tree containing several `index.md`, `GLOSSARY.md`, and ordinary Markdown files in different subdirectories, then run `speclint` on the root directory; conditions=names and sortable paths are predefined, and some files contain recognizable violations; expected=files are processed recursively in the specified order, type is determined by basename, and all eligible Markdown files are checked.
+- T11.1. R-ID=R8.1,R8.2; procedure=run `speclint.py` without arguments, then with a path to a nonexistent object and a path to an existing file whose extension is not `.md`; conditions=run each invocation separately and record `stderr` and the exit code; expected=each invalid invocation prints a diagnostic to `stderr` and returns `speclint-error-exit-code`, while a valid Markdown path is accepted.
+- T11.2. R-ID=R8.3,R8.4,R8.5; procedure=create a temporary tree containing several `index.md`, `GLOSSARY.md`, and ordinary Markdown files in different subdirectories, then run `speclint.py` on the root directory; conditions=names and sortable paths are predefined, and some files contain recognizable violations; expected=files are processed recursively in the specified order, type is determined by basename, and all eligible Markdown files are checked.
 - T11.3. R-ID=R3.17,R3.18,R3.19,R4.5,R4.13,R4.14,R8.6,R8.7,R8.8,R8.9,R8.26,R8.27; procedure=prepare specs with valid and invalid IDs, missing/repeated `verification`, invalid markers, incorrect section prefixes, multi-line entries, missing required T-IDs, and extra T-IDs for `manual`; conditions=run each case as a separate fixture with a known expected result; expected=valid fixtures pass, each invalid fixture reports the corresponding violation, T-IDs are required only for `automated` and `scenario`, and reference checking does not claim semantic test sufficiency.
 - T11.4. R-ID=R8.10,R8.11,R8.12; procedure=run the numeric scanner on paired fixtures containing bare numbers and the same numbers inside allowed exceptions, identifiers, versions, and letter-starting tokens; conditions=fixtures differ only in the numeric token's context; expected=bare numeric literals outside allowed areas are reported, while excluded tokens are not reported as bare numbers.
 - T11.5. R-ID=R8.13,R8.14,R8.15; procedure=check fixtures with closed and unclosed fenced code blocks, headings inside and outside blocks, and closing markers of different lengths; conditions=each fixture has a predefined expected section and numeric-scanner exclusion area; expected=scanner behavior matches the rules for recognizing blocks and switching sections.
-- T11.6. R-ID=R8.16,R8.17,R8.18,R8.19,R8.20; procedure=run `speclint` on table-formatted indexes and glossaries with valid and invalid headers, rows, paths, statuses, Reference IDs, term IDs, sorting, and `Defined in`; conditions=test resolvable references separately from the case where Reference IDs cannot be collected; expected=invalid fields and references are reported, valid ones are accepted, and failure to resolve prefixes without collected Reference IDs produces a warning and skips only that check.
+- T11.6. R-ID=R8.16,R8.17,R8.18,R8.19,R8.20; procedure=run `speclint.py` on table-formatted indexes and glossaries with valid and invalid headers, rows, paths, statuses, Reference IDs, term IDs, sorting, and `Defined in`; conditions=test resolvable references separately from the case where Reference IDs cannot be collected; expected=invalid fields and references are reported, valid ones are accepted, and failure to resolve prefixes without collected Reference IDs produces a warning and skips only that check.
 - T11.7. R-ID=R8.21,R8.22; procedure=run lint on fixtures producing no findings, warnings only, and errors; conditions=fixtures are prepared in advance to produce each of the three result classes; expected=diagnostics use the specified `stderr` format, warnings have the `speclint:` prefix, and the exit code matches the clean, warning, or error result.
 - T11.8. R-ID=R1.2,R9.6,R9.10,R9.18; procedure=submit a request for a significant behavior change and track the agent's actions from specification through implementation verification; conditions=the spec initially does not cover the requested behavior, there is no explicit permission to skip approval, and checks are available; expected=the agent first updates and checks the spec, then completes Plan and Tasks before implementation, does not begin implementation before required approval, and after implementation runs checks, compares affected requirements, and updates `Tests`/`Verification`.
-- T11.9. R-ID=R7.1,R7.2,R7.4; procedure=change an existing requirement while leaving its associated `Verification` entry stale; conditions=both `speclint` and the semantic pass are available in the project; expected=the agent runs `speclint` first, reports the semantic-pass result separately, and updates or removes the `Verification` entry if it no longer matches the requirement.
+- T11.9. R-ID=R7.1,R7.2,R7.4; procedure=change an existing requirement while leaving its associated `Verification` entry stale; conditions=both `speclint.py` and the semantic pass are available in the project; expected=the agent runs `speclint.py` first, reports the semantic-pass result separately, and updates or removes the `Verification` entry if it no longer matches the requirement.
 
 ## Implementation
 
-- I1. The skill is implemented by the `SKILL.md` instructions and the `speclint` script. The instructions describe the spec-first process, formatting rules for specs, the index and glossary, change verification, tracking open discrepancies, and implementation against an approved contract. Mechanical checking is limited to properties the script can recognize; other properties are established through the semantic pass and review.
+- I1. The skill is implemented by the `SKILL.md` instructions and the `speclint.py` script. The instructions describe the spec-first process, formatting rules for specs, the index and glossary, change verification, tracking open discrepancies, and implementation against an approved contract. Mechanical checking is limited to properties the script can recognize; other properties are established through the semantic pass and review.
