@@ -24,11 +24,13 @@ Every assignment only fills an unset/empty variable, so the precedence is:
 | `GITLAB_HOST`            | `gitlab.corp.mail.ru`     | instance host for every API call                   |
 | `GITLAB_DEFAULT_PROJECT` | (empty)                   | `<project>` positional may be omitted when set; the remaining positionals shift left (mr-updates/mr-threads/mr-verify-posted: 1 arg, mr-draft-review/mr-resolve/mr-verify-report: 2 args, mr-reply: 3 args, mr-comment: 4 args) |
 | `GITLAB_REPO`            | (cwd)                     | git clone used for sha recovery / hunks            |
-| `GITLAB_TOOLS_STATE_DIR` | `<tools>/.state` (next to `lib.sh`) | directory for `--state` marker files given as a bare filename (mr-updates.sh); created on demand |
+| `GITLAB_TOOLS_STATE_DIR` | `<tools>/.state` (next to `lib.sh`) | directory for `--state` marker files given as a bare filename (mr-updates.sh; mr-has-updates.sh resolves bare names under its `has-updates/` subdir) |
 | `GITLAB_TOKEN`           | glab config               | auth token, honored by glab itself                 |
 
 All output is plain text, no ANSI colors (`NO_COLOR` needs no handling).
-Exit codes: 0 success, 1 failure, 2 usage error.
+Exit codes: 0 success, 1 failure, 2 usage error — except `mr-has-updates.sh`,
+whose boolean contract redefines the pair: 0 updates present, 1 no updates
+(and the baseline first run), plus 3 for an API/network failure.
 
 ## Instance traps these scripts encode
 
@@ -166,6 +168,67 @@ Example:
 
 ```
 mr-updates.sh ai/streamflow/flowruntime 1887 --state mr1887.json
+```
+
+## mr-has-updates.sh
+
+```
+mr-has-updates.sh <project> <mr_iid> [--state <file>]
+```
+
+Fast boolean "does this MR have any updates?" check — the tool for timers
+(wake the agent only when something changed). Read-only: GET-only, nothing
+is posted, no git clone needed. Compares the current MR snapshot against
+the has-updates marker and reports the categories that moved, one line per
+category:
+
+- `commits` — a new head (the commit walk stops at the marker head; only
+  short ids are ever stored — masked 40-hex shas never enter the marker);
+- `notes` — any note with a higher id, system notes included (the notes
+  listing is walked with full pagination — the max note id must be exact);
+- `threads` — resolve/unresolve flips (system notes plus the unresolved-id
+  set diff) and new discussions;
+- `mr state` — state (opened/locked/merged/closed) and draft/WIP;
+- `title/description` — hashes only (length + sha256 prefix; no text is
+  stored);
+- `reviewers/approvals` — username set diffs (`approved_by` via the
+  approvals endpoint);
+- `merge status` — `merge_status` / `detailed_merge_status`;
+- `CI` — the newest pipeline for the current head sha
+  (`pipelines?sha=<head>`; the sha filter needs the FULL 40-hex id — a
+  short id returns an empty list on this instance — and when the commits
+  endpoint masks the id the fallback is the newest pipeline of the
+  `refs/merge-requests/<iid>/head` ref), its id/status change.
+
+Exit codes (a boolean contract — note it redefines the toolkit's usual
+0/1): **0** updates present (stdout carries the summary lines — attach
+them to the timer wakeup); **1** no updates; **2** usage error; **3**
+API/network failure (diagnostics on stderr; the marker is NOT rewritten,
+so the delta is not lost).
+
+State: `--state` is optional; the default is
+`<tools>/.state/has-updates/<project without slashes>__<iid>.json` (a bare
+filename resolves under `GITLAB_TOOLS_STATE_DIR/has-updates/`; the
+directory is created on demand). The first run writes a baseline, prints
+`baseline recorded (...)`, and exits 1; a rerun with no changes exits 1
+with empty stdout (a single quiet stderr line names the last-check time).
+The marker schema is additive (`"schema": 3`), holds no secrets (no full
+shas, no MR text — short ids and length+hash pairs only), and is written
+atomically (tmp + rename); an unchanged run never touches it. API budget:
+~6 GETs (MR, commits, notes, discussions, approvals, pipelines); only the
+notes listing is paginated through (max-note-id exactness), the rest use
+`per_page=100` pages (discussions newest-first — new-thread detection
+needs the fresh tail, resolve flips of old threads come from system
+notes).
+
+Examples:
+
+```
+# timer: wake the agent only when something changed
+mr-has-updates.sh ai/streamflow/flowruntime 2067 && <run the agent>
+
+# default per-MR marker under <tools>/.state/has-updates/
+mr-has-updates.sh ai/streamflow/flowruntime 2067
 ```
 
 ## mr-threads.sh
@@ -423,3 +486,12 @@ comments.json) plus one unanchored timeline note all matched with the
 expected note ids, anchors, and resolved flags; draft count 0; max note id
 reported; a deliberately bogus expected body answered `not-found` with
 exit 1; `@file` bodies and `--ai-only` re-verified the same set.
+
+`mr-has-updates.sh` was exercised live against MR !2067 (read-only, all
+markers in a temp directory): the first run recorded a baseline and exited
+1; the immediate rerun exited 1 with empty stdout (no false positives); a
+tampered copy of the marker (older max note id, older head short id,
+changed title/description hashes, a different pipeline id/status, changed
+reviewer/approval sets, a merged+draft MR state) exited 0 with one summary
+line per category; a nonexistent project exited 3 with the HTTP 404
+diagnostics on stderr and no marker written; usage errors exited 2.

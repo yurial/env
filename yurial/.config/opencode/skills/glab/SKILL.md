@@ -660,6 +660,7 @@ One line per script:
 
 - `mr-list.sh [--role reviewer|author|assignee] [--state opened|closed|merged|all] [--draft|--no-draft] [--json] [--project <group/proj>] [--max N]` — global MR list by role for the current user across all accessible projects (default `--role reviewer --state opened`, the "what awaits my review" scenario); the mandatory `scope=all` (section 5) and full pagination are built in; one block per MR (`references.full`, DRAFT mark, title, author, updated_at date, web_url), newest update first; `--json` prints the normalized array; GET-only, an empty result is a success.
 - `mr-updates.sh <project> <iid> [--since <iso8601|sha>] [--state <file>] [--fetch]` — MR state, new commits (diffstat inside a clone), new notes, and thread status changes; with `--state` only the delta since the marker (additive schema, a masked sha is never stored as a cutoff).
+- `mr-has-updates.sh <project> <iid> [--state <file>]` — fast boolean "any updates on this MR?" check for timers (read-only, GET-only, no clone needed): compares commits, notes (system ones included), thread resolve flips and new discussions, MR state/draft, title/description hashes, reviewers/approvals, merge status, and the head-sha CI pipeline against a has-updates marker; exit 0 — updates present (one summary line per category on stdout), 1 — none (the first run records a baseline and prints `baseline recorded (...)`), 2 — usage error, 3 — API failure (the marker is left untouched so the delta is not lost).
 - `mr-threads.sh <project> <iid> [--open|--all] [--ai-only] [--max-chars N] [--full]` — readable thread dump: discussion id, resolved state, anchor, authors, bodies; GET-only.
 - `mr-comment.sh <project> <iid> <path> <line> <body-or-@file> [--old-side] [--no-prefix] [--force] [--dry-run] [--repo <dir>]` — one line-anchored comment: sha recovery, local hunk validation (refuses outside hunks with the valid ranges; `--force` posts unpositioned with `path:line` prepended), POST verified by GET.
 - `mr-draft-review.sh <project> <iid> <comments.json> [--publish] [--dry-run] [--no-prefix] [--repo <dir>] [--ignore-stray]` — batch review via draft notes: validation table, stray-draft refusal (pre-existing pending drafts abort the run), drafts verified by GET; `--publish` publishes only this run's drafts one by one, with `bulk_publish` as an explicitly warned fallback; reply items post immediately via `mr-reply.sh`.
@@ -670,7 +671,8 @@ One line per script:
 
 When to prefer the tools: use them instead of hand-built glab calls for
 exactly these operations — a global role-based MR listing (reviewer/author/
-assignee across all projects), update polling with a state marker, thread
+assignee across all projects), update polling with a state marker, a
+boolean "any updates?" check for timers, thread
 dumps, a single anchored comment, a batch review, a discussion reply, a
 single-thread resolve, and read-only post-publish verification
 (pending-draft count, max note id, expected-body/anchor checks). Raw glab
