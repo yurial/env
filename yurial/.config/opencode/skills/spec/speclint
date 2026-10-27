@@ -235,6 +235,18 @@ def repo_root(path: Path) -> Path | None:
     return None
 
 
+def table_cells(line: str) -> list[str] | None:
+    """Return trimmed Markdown table cells, or None for a non-table line."""
+    stripped = line.strip()
+    if not stripped.startswith("|") or not stripped.endswith("|"):
+        return None
+    return [cell.strip().strip(" `*_ ") for cell in stripped[1:-1].split("|")]
+
+
+def is_table_separator(cells: list[str]) -> bool:
+    return bool(cells) and all(re.fullmatch(r":?-{3,}:?", cell.replace(" ", "")) for cell in cells)
+
+
 def scan_index(path: Path) -> list[Finding]:
     findings: list[Finding] = []
     try:
@@ -244,42 +256,40 @@ def scan_index(path: Path) -> list[Finding]:
     root = repo_root(path)
     specs_dir = next((p for p in (path.parent, *path.parents) if p.name == "specs"), None)
     base = root or (specs_dir.parent if specs_dir else path.parent)
-    blocks: list[tuple[int, str]] = []
-    start, buf, in_fence = 0, [], False
+    header = ["Path", "Reference", "Status", "Summary"]
+    header_line = None
+    rows: list[tuple[int, list[str]]] = []
     for i, line in enumerate(lines, 1):
-        if re.match(r"^(`{3,}|~{3,})", line):
-            in_fence = not in_fence
+        cells = table_cells(line)
+        if cells is None:
             continue
-        if in_fence:
+        normalized = [re.sub(r"[*`]", "", c).strip() for c in cells]
+        if normalized == header:
+            header_line = i
             continue
-        if line.strip() and (line.startswith("- ") or line.startswith("## ") or line.startswith("### ")):
-            if buf:
-                blocks.append((start, " ".join(buf)))
-            start, buf = i, [line]
-        elif line.strip():
-            if not buf:
-                start = i
-            buf.append(line.strip())
-        elif buf:
-            blocks.append((start, " ".join(buf)))
-            buf = []
-    if buf:
-        blocks.append((start, " ".join(buf)))
-    for line_no, block in blocks:
-        # A top-level list item is an index entry even when its Path field is missing.
-        if not block.lstrip().startswith("- "):
+        if is_table_separator(cells):
+            if header_line is None:
+                findings.append(Finding(path, i, "table separator appears before the required index header"))
             continue
-        fields = parse_fields(block)
-        for required in ("path", "reference", "status", "summary"):
-            if not fields.get(required):
-                findings.append(Finding(path, line_no, f"index entry missing required field {required.title()}"))
-        status = fields.get("status", "").strip(" `*_ ")
+        if header_line is not None:
+            rows.append((i, cells))
+    if header_line is None:
+        return [Finding(path, 1, "index must contain a Markdown table with header: Path | Reference | Status | Summary")]
+    for line_no, cells in rows:
+        if len(cells) != 4:
+            findings.append(Finding(path, line_no, "index row must contain exactly four cells"))
+            continue
+        fields = dict(zip(("path", "reference", "status", "summary"), cells))
+        for key in ("path", "reference", "status", "summary"):
+            if not fields[key]:
+                findings.append(Finding(path, line_no, f"index row missing required field {key.title()}"))
+        status = fields["status"]
         if status and status not in {"draft", "stable"}:
             findings.append(Finding(path, line_no, f"invalid Status {status!r}; expected draft or stable"))
-        ref = fields.get("reference", "").strip(" `*_ ")
+        ref = fields["reference"]
         if ref and not re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", ref):
             findings.append(Finding(path, line_no, f"invalid Reference {ref!r}; expected lowercase ASCII letters/digits separated by single hyphens"))
-        value = fields.get("path", "").strip(" `*_ ")
+        value = fields["path"]
         if value:
             target = (base / value).resolve()
             if not target.exists():
@@ -293,32 +303,53 @@ def scan_glossary(path: Path, reference_ids: set[str] | None) -> list[Finding]:
         lines = path.read_text(encoding="utf-8-sig").splitlines()
     except (OSError, UnicodeError) as exc:
         return [Finding(path, 1, f"cannot read glossary: {exc}")]
-    entries: list[tuple[int, str, str]] = []
+    header = ["Term ID", "Definition", "Defined in"]
+    header_line = None
+    entries: list[tuple[int, str]] = []
+    rows: list[tuple[int, list[str]]] = []
     for i, line in enumerate(lines, 1):
-        if not line.strip() or line.lstrip().startswith("#"):
+        cells = table_cells(line)
+        if cells is None:
             continue
-        # A glossary term entry is a top-level list item with a term ID.
-        m = re.match(r"^-\s+([A-Za-z][A-Za-z0-9-]*)\s*[:—-]\s*(.*)$", line)
-        if not m:
-            if re.match(r"^-\s+", line):
-                findings.append(Finding(path, i, "glossary entry must begin with an English-alphabet term ID followed by ':' or a dash"))
+        normalized = [re.sub(r"[*`]", "", c).strip() for c in cells]
+        if normalized == header:
+            header_line = i
             continue
-        term_id, body = m.group(1), m.group(2)
-        if not term_id.isascii() or not term_id.isalpha() and not re.fullmatch(r"[A-Za-z][A-Za-z0-9-]*", term_id):
-            findings.append(Finding(path, i, f"invalid glossary term ID {term_id!r}"))
-        entries.append((i, term_id, body))
-        defined = re.search(r"(?:\*\*|`)?Defined in(?:\*\*|`)?\s*:\s*([A-Za-z0-9-]+)", body, re.I)
-        if not defined:
-            findings.append(Finding(path, i, "glossary entry missing Defined in field"))
-        elif reference_ids is not None:
-            prefix = defined.group(1)
-            if not any(ref == prefix or ref.startswith(prefix + "-") for ref in reference_ids):
-                findings.append(Finding(path, i, f"Defined in prefix {prefix!r} does not resolve to an index Reference ID"))
-    ids = [term for _, term, _ in entries]
-    if ids != sorted(ids, key=str.casefold):
-        for line_no, _, _ in entries:
-            findings.append(Finding(path, line_no, "glossary term IDs are not sorted alphabetically"))
-            break
+        if is_table_separator(cells):
+            continue
+        if header_line is not None:
+            rows.append((i, cells))
+    if header_line is None:
+        return [Finding(path, 1, "glossary must contain a Markdown table with header: Term ID | Definition | Defined in")]
+    term_pattern = r"[a-z0-9]+(?:-[a-z0-9]+)*(?:/[a-z0-9]+(?:-[a-z0-9]+)*)"
+    for line_no, cells in rows:
+        if len(cells) != 3:
+            findings.append(Finding(path, line_no, "glossary row must contain exactly three cells"))
+            continue
+        term_id, definition, defined_in = cells
+        if not term_id:
+            findings.append(Finding(path, line_no, "glossary row missing required field Term ID"))
+            continue
+        if not re.fullmatch(term_pattern, term_id) or not term_id.isascii():
+            findings.append(Finding(path, line_no, f"invalid glossary term ID {term_id!r}; expected <reference>/<term> using lowercase ASCII letters, digits, and hyphens"))
+        if not definition:
+            findings.append(Finding(path, line_no, "glossary row missing required field Definition"))
+        defined_match = re.match(r"^([a-z0-9]+(?:-[a-z0-9]+)*)", defined_in)
+        if not defined_in:
+            findings.append(Finding(path, line_no, "glossary row missing required field Defined in"))
+        elif not defined_match:
+            findings.append(Finding(path, line_no, f"invalid Defined in value {defined_in!r}"))
+        else:
+            defined_ref = defined_match.group(1)
+            if "/" in term_id and defined_ref != term_id.split("/", 1)[0]:
+                findings.append(Finding(path, line_no, f"Defined in {defined_ref!r} must equal term ID prefix {term_id.split('/', 1)[0]!r}"))
+            elif reference_ids is not None and defined_ref not in reference_ids:
+                findings.append(Finding(path, line_no, f"Defined in prefix {defined_ref!r} does not resolve to an index Reference ID"))
+        entries.append((line_no, term_id))
+    ids = [term for _, term in entries]
+    if ids != sorted(ids):
+        if entries:
+            findings.append(Finding(path, entries[0][0], "glossary term IDs are not sorted alphabetically"))
     return findings
 
 
@@ -350,13 +381,25 @@ def collect_reference_ids(files: list[Path]) -> tuple[set[str] | None, list[Find
     indexes = [p for p in files if p.name == "index.md"]
     if not indexes:
         return None, []
-    for p in indexes:
+    for path in indexes:
         try:
-            text = p.read_text(encoding="utf-8-sig")
+            lines = path.read_text(encoding="utf-8-sig").splitlines()
         except (OSError, UnicodeError):
             continue
-        for m in re.finditer(r"(?:\*\*|`)?Reference(?:\*\*|`)?\s*:\s*([a-z0-9]+(?:-[a-z0-9]+)*)", text):
-            refs.add(m.group(1))
+        header_seen = False
+        for line in lines:
+            cells = table_cells(line)
+            if cells is None:
+                continue
+            normalized = [re.sub(r"[*`]", "", c).strip() for c in cells]
+            if normalized == ["Path", "Reference", "Status", "Summary"]:
+                header_seen = True
+                continue
+            if not header_seen or is_table_separator(cells) or len(cells) != 4:
+                continue
+            ref = cells[1]
+            if re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", ref):
+                refs.add(ref)
     return (refs if refs else None), []
 
 

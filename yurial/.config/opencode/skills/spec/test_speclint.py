@@ -143,11 +143,11 @@ class TestSpecScanning(TempFiles):
 class TestIndexAndGlossary(TempFiles):
     def test_index_accepts_valid_fields_and_existing_path(self):
         self.write("target.md", "# target\n")
-        index = self.write("index.md", "- Path: target.md Reference: target-doc Status: stable Summary: A target\n")
+        index = self.write("index.md", "| Path | Reference | Status | Summary |\n| --- | --- | --- | --- |\n| target.md | target-doc | stable | A target |\n")
         self.assertEqual(speclint.scan_index(index), [])
 
     def test_index_rejects_missing_fields_status_reference_and_path(self):
-        index = self.write("index.md", "- Path: missing.md Reference: Bad--ID Status: retired\n")
+        index = self.write("index.md", "| Path | Reference | Status | Summary |\n| --- | --- | --- | --- |\n| missing.md | Bad--ID | retired | |\n")
         messages = [f.message for f in speclint.scan_index(index)]
         self.assertTrue(any("missing required field Summary" in m for m in messages))
         self.assertTrue(any("invalid Status" in m for m in messages))
@@ -156,53 +156,61 @@ class TestIndexAndGlossary(TempFiles):
 
     def test_index_status_values_are_case_sensitive(self):
         self.write("target.md", "# target\n")
-        index = self.write("index.md", "- Path: target.md Reference: target-doc Status: Stable Summary: A target\n")
+        index = self.write("index.md", "| Path | Reference | Status | Summary |\n| --- | --- | --- | --- |\n| target.md | target-doc | Stable | A target |\n")
         self.assertTrue(any("invalid Status 'Stable'" in f.message for f in speclint.scan_index(index)))
 
     def test_index_entry_missing_path_is_not_silently_ignored(self):
-        index = self.write("index.md", "- Reference: alpha-ref Status: stable Summary: an entry without a path\n")
+        index = self.write("index.md", "| Path | Reference | Status | Summary |\n| --- | --- | --- | --- |\n| | alpha-ref | stable | an entry without a path |\n")
         messages = [f.message for f in speclint.scan_index(index)]
         self.assertTrue(any("missing required field Path" in m for m in messages), messages)
 
-    def test_index_supports_bold_and_multiline_fields(self):
-        self.write("target.md", "# target\n")
-        index = self.write("index.md", "- **Path:** target.md\n  **Reference:** target-doc\n  **Status:** stable\n  **Summary:** A target\n")
-        self.assertEqual(speclint.scan_index(index), [])
+    def test_index_requires_table_header(self):
+        index = self.write("index.md", "- Path: target.md Reference: target-doc Status: stable Summary: A target\n")
+        self.assertTrue(any("must contain a Markdown table" in f.message for f in speclint.scan_index(index)))
 
     def test_index_path_resolution_uses_git_root_when_available(self):
         repo = self.root / "repo"
         (repo / "specs").mkdir(parents=True)
         (repo / "target.md").write_text("# target\n", encoding="utf-8")
         index = repo / "specs" / "index.md"
-        index.write_text("- Path: target.md Reference: target-doc Status: stable Summary: A target\n", encoding="utf-8")
+        index.write_text("| Path | Reference | Status | Summary |\n| --- | --- | --- | --- |\n| target.md | target-doc | stable | A target |\n", encoding="utf-8")
         with mock.patch.object(speclint, "repo_root", return_value=repo):
             self.assertEqual(speclint.scan_index(index), [])
 
     def test_index_path_resolution_uses_specs_parent_without_git(self):
         self.write("component.md", "# target\n")
-        index = self.write("specs/index.md", "- Path: component.md Reference: component Status: draft Summary: component\n")
+        index = self.write("specs/index.md", "| Path | Reference | Status | Summary |\n| --- | --- | --- | --- |\n| component.md | component | draft | component |\n")
         self.assertEqual(speclint.scan_index(index), [])
 
     def test_glossary_valid_sorted_and_resolvable(self):
-        glossary = self.write("GLOSSARY.md", "- Alpha: definition; Defined in: alpha-core\n- Beta: definition; Defined in: beta\n")
+        glossary = self.write("GLOSSARY.md", "| Term ID | Definition | Defined in |\n| --- | --- | --- |\n| alpha-core/alpha | definition | alpha-core |\n| beta/beta | definition | beta |\n")
         self.assertEqual(speclint.scan_glossary(glossary, {"alpha-core", "beta"}), [])
 
     def test_glossary_reports_missing_defined_in_bad_id_and_sort_order(self):
-        glossary = self.write("GLOSSARY.md", "- Zebra: definition\n- Äther: definition; Defined in: bad\n- Alpha: definition; Defined in: bad\n")
+        glossary = self.write("GLOSSARY.md", "| Term ID | Definition | Defined in |\n| --- | --- | --- |\n| zeta/zebra | definition | zeta |\n| alpha/alpha | definition | bad |\n| äther/term | definition | |\n")
         messages = [f.message for f in speclint.scan_glossary(glossary, {"valid-ref"})]
-        self.assertTrue(any("missing Defined in" in m for m in messages))
+        self.assertTrue(any("missing required field Defined in" in m for m in messages))
         self.assertTrue(any("not sorted alphabetically" in m for m in messages))
         self.assertTrue(any("does not resolve" in m for m in messages))
 
+    def test_glossary_defined_in_allows_requirement_ids_after_owner(self):
+        glossary = self.write("GLOSSARY.md", "| Term ID | Definition | Defined in |\n| --- | --- | --- |\n| alpha/alpha-term | definition | alpha; R1.2 |\n")
+        self.assertEqual(speclint.scan_glossary(glossary, {"alpha"}), [])
+
+    def test_glossary_requires_full_term_ids_and_table_shape(self):
+        glossary = self.write("GLOSSARY.md", "| Term ID | Definition | Defined in |\n| --- | --- | --- |\n| badterm | | wrong | extra |\n")
+        messages = [f.message for f in speclint.scan_glossary(glossary, {"valid"})]
+        self.assertTrue(any("exactly three cells" in m for m in messages))
+
     def test_glossary_skips_prefix_resolution_without_refs(self):
-        glossary = self.write("GLOSSARY.md", "- Alpha: definition; Defined in: no-such-prefix\n")
+        glossary = self.write("GLOSSARY.md", "| Term ID | Definition | Defined in |\n| --- | --- | --- |\n| no-such-prefix/alpha | definition | no-such-prefix |\n")
         self.assertEqual(speclint.scan_glossary(glossary, None), [])
 
 
 class TestDiscoveryAndCLI(TempFiles):
     def test_discovery_recurses_and_sorts_by_file_type_then_path(self):
         paths = [
-            self.write("z.md", ""), self.write("b/GLOSSARY.md", ""),
+            self.write("z.md", ""), self.write("b/GLOSSARY.md", "| Term ID | Definition | Defined in |\n| --- | --- | --- |\n| z-ref/term | definition | z-ref |\n"),
             self.write("a/index.md", ""), self.write("index.md", ""),
             self.write("a/x.md", ""),
         ]
@@ -253,7 +261,7 @@ class TestDiscoveryAndCLI(TempFiles):
         clean = self.write("clean.md", "## Requirements\n- R1. verification=manual; requirement\n")
         self.assertEqual(speclint.main([str(clean)]), speclint.CLEAN)
         # A glossary with no index produces a warning, not an error.
-        glossary = self.write("GLOSSARY.md", "- Alpha: definition; Defined in: alpha\n")
+        glossary = self.write("GLOSSARY.md", "| Term ID | Definition | Defined in |\n| --- | --- | --- |\n| alpha/alpha | definition | alpha |\n")
         stderr = io.StringIO()
         with contextlib.redirect_stderr(stderr):
             warning_code = speclint.main([str(glossary)])
@@ -267,7 +275,7 @@ class TestDiscoveryAndCLI(TempFiles):
         self.assertIn(f"{bad}:2:", stderr.getvalue())
 
     def test_cli_multiple_paths_and_warning_plus_error_exit_error(self):
-        glossary = self.write("GLOSSARY.md", "- Alpha: definition; Defined in: alpha\n")
+        glossary = self.write("GLOSSARY.md", "| Term ID | Definition | Defined in |\n| --- | --- | --- |\n| alpha/alpha | definition | alpha |\n")
         bad = self.write("bad.md", "## Requirements\nplain prose\n")
         stderr = io.StringIO()
         with contextlib.redirect_stderr(stderr):
@@ -278,9 +286,9 @@ class TestDiscoveryAndCLI(TempFiles):
 
     def test_directory_dispatches_indexes_glossaries_then_specs(self):
         self.write("z.md", "")
-        self.write("b/GLOSSARY.md", "")
+        self.write("b/GLOSSARY.md", "| Term ID | Definition | Defined in |\n| --- | --- | --- |\n| z-ref/term | definition | z-ref |\n")
         self.write("a/index.md", "")
-        self.write("index.md", "- Path: z.md Reference: z-ref Status: stable Summary: z\n")
+        self.write("index.md", "| Path | Reference | Status | Summary |\n| --- | --- | --- | --- |\n| z.md | z-ref | stable | z |\n")
         order = []
         with mock.patch.object(speclint, "scan_index", side_effect=lambda p: order.append(("index", str(p))) or []), \
              mock.patch.object(speclint, "scan_glossary", side_effect=lambda p, refs: order.append(("glossary", str(p))) or []), \

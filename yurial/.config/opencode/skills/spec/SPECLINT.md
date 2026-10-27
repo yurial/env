@@ -72,13 +72,13 @@ Spec source of truth for: `speclint.py` — mechanical checking of Markdown spec
 - R4.6. verification=automated; If a fenced code block is not closed, all subsequent lines through end of file are treated as part of the block for numeric scanning and section switching.
 
 - R5. Indexes:
-- R5.1. verification=automated; For `index.md`, the script checks that every index entry contains `Path`, `Reference`, `Status`, and `Summary` fields.
+- R5.1. verification=automated; For `index.md`, the script checks compliance with the index-formatting requirements defined by the specification-authoring rules (SPEC R2.8), including the required header, column order, and non-empty data cells. This rule defines the checks performed by the script; it does not independently define the document format.
 - R5.2. verification=automated; The script accepts only `draft` or `stable` for `Status` and checks that `Reference` consists of lowercase ASCII letters and digits separated by single hyphens.
 - R5.3. verification=automated; The script checks that every path listed in the index exists.
 - R5.4. verification=automated; An index path is resolved relative to the Git repository root when it can be determined; otherwise it is resolved relative to the parent directory of `specs/` or the index directory itself.
 
 - R6. Glossary:
-- R6.1. verification=automated; For `GLOSSARY.md`, the script checks term ID format, use of the English alphabet, alphabetical ordering, and the format of the `Defined in` field.
+- R6.1. verification=automated; For `GLOSSARY.md`, the script checks compliance with the glossary-formatting requirements defined by the specification-authoring rules (SPEC R6.5), including the required header, column order, row cells, term ID format, English alphabet, alphabetical ordering, and `Defined in` format. This rule defines the checks performed by the script; it does not independently define the document format.
 - R6.2. verification=automated; Term ID prefixes are resolved against Reference IDs collected from indexes.
 - R6.3. verification=automated; If Reference IDs cannot be collected, the script skips prefix-resolution checking and emits a warning.
 
@@ -110,8 +110,8 @@ Spec source of truth for: `speclint.py` — mechanical checking of Markdown spec
 - T4.1. R-ID=R4.1,R4.2,R4.3,R4.4,R4.5,R4.6; procedure=run the scanner on paired fixtures containing bare numbers, numbers in excluded sections and code blocks, digits in IDs and versions, tokens with alphabetic suffixes, and closed and unclosed fenced code blocks; conditions=variants differ only in the context being checked; expected=bare numeric literals outside exclusions are reported, excluded tokens are not reported, and section switching follows the block rules.
 
 - T5. Index and glossary:
-- T5.1. R-ID=R5.1,R5.2,R5.3,R5.4; procedure=check an index with valid and invalid fields, statuses, Reference IDs, and paths, both when the Git root can be determined and when it cannot; conditions=paths are checked under both resolution schemes; expected=invalid fields and nonexistent paths are reported, and path resolution follows the specified rule.
-- T5.2. R-ID=R6.1,R6.2,R6.3; procedure=check glossaries with valid and invalid term IDs, sorting, `Defined in` fields, and resolvable/unresolvable prefixes; conditions=run a separate case without collected Reference IDs; expected=format violations are reported, and when Reference IDs are unavailable a warning is emitted and only prefix-resolution checking is skipped.
+- T5.1. R-ID=R5.1,R5.2,R5.3,R5.4; procedure=check table-formatted indexes with valid and invalid headers, row cell counts, fields, statuses, Reference IDs, and paths, both when the Git root can be determined and when it cannot; conditions=paths are checked under both resolution schemes; expected=invalid fields and nonexistent paths are reported, and path resolution follows the specified rule.
+- T5.2. R-ID=R6.1,R6.2,R6.3; procedure=check table-formatted glossaries with valid and invalid headers, row cell counts, full term IDs, sorting, `Defined in` cells, and resolvable/unresolvable prefixes; conditions=run a separate case without collected Reference IDs; expected=format violations are reported, and when Reference IDs are unavailable a warning is emitted and only prefix-resolution checking is skipped.
 
 - T6. Diagnostics and exit codes:
 - T6.1. R-ID=R7.1,R7.2,R7.3,R7.4,R7.5; procedure=run the script on fixtures with no findings, warnings only, and errors; conditions=each fixture is designed for one result class; expected=diagnostic formatting and warning prefix are correct, and exit codes match the corresponding configured values.
