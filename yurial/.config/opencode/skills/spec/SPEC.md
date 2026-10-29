@@ -1,7 +1,7 @@
 # Skill `spec`
 
 Status: stable
-Spec source of truth for: OpenCode `spec` skill — authoring project specifications, the spec-first flow, and mechanical spec checks
+Spec source of truth for: the `spec` skill — authoring project specifications, the spec-first flow, and mechanical spec checks
 
 ## Overview
 
@@ -29,10 +29,10 @@ The `spec` skill defines the process for creating and reviewing project specific
 ## Configuration
 
 - `root-spec-growth-guide`: integer; approximately 300 lines; fixed; a guideline for suggesting that the root `SPEC.md` be moved into a `specs/` tree; related to R2.3.
-- `speclint-clean-exit-code`: integer; 0; fixed; exit code when there are no findings; related to R6.5.
-- `speclint-warning-exit-code`: integer; 1; fixed; exit code for warnings without errors; related to R6.5.
-- `speclint-error-exit-code`: integer; 2; fixed; exit code for lint errors or an invalid invocation; related to R6.1 and R6.5.
-- `task-file-count-decomposition-guide`: integer; approximately 5 files; fixed; a guideline for considering further task decomposition; related to R8.7.
+- `speclint-clean-exit-code`: integer; 0; fixed; exit code when there are no findings; related to R8.22.
+- `speclint-warning-exit-code`: integer; 1; fixed; exit code for warnings without errors; related to R8.22.
+- `speclint-error-exit-code`: integer; 2; fixed; exit code for lint errors or an invalid invocation; related to R8.2 and R8.22.
+- `task-file-count-decomposition-guide`: integer; approximately 5 files; fixed; a guideline for considering further task decomposition; related to R9.15.
 
 ## Requirements
 

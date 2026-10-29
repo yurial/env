@@ -1,6 +1,6 @@
 ---
 name: spec
-description: Create, review, and maintain project specifications; enforce spec-first behavior changes; align related contracts; and verify implementation against approved requirements.
+description: "Use when writing, updating, or reviewing project specifications (SPEC.md, specs/<component>.md, specs/index.md, specs/GLOSSARY.md, or colocated <library>/<component>/SPEC.md), when the user requests any change to functionality, behavior, or constraints (spec-first flow: spec before code), when checking related specs for collisions, or when implementing code against an existing spec. Use ONLY for specification documents and spec-driven changes, not for READMEs or general docs, not for TLA+ specs, TLC models, or proofs (see tla-plus, tlc-run, tlaps skills)."
 ---
 
 # Spec skill
@@ -210,10 +210,10 @@ A specification is not reported as fully conforming while any applicable require
 Treat these as fixed configuration entries rather than independent informal defaults:
 
 - `root-spec-growth-guide`: integer, approximately 300 lines; a guideline for suggesting a move from a root `SPEC.md` to a `specs/` tree; related to R2.3.
-- `speclint-clean-exit-code`: integer `0`; exit code when there are no findings; related to R6.5.
-- `speclint-warning-exit-code`: integer `1`; exit code for warnings without errors; related to R6.5.
-- `speclint-error-exit-code`: integer `2`; exit code for lint errors or invalid invocation; related to R6.1 and R6.5.
-- `task-file-count-decomposition-guide`: integer, approximately five files; a guideline for considering task decomposition; related to R8.7.
+- `speclint-clean-exit-code`: integer `0`; exit code when there are no findings; related to R8.22.
+- `speclint-warning-exit-code`: integer `1`; exit code for warnings without errors; related to R8.22.
+- `speclint-error-exit-code`: integer `2`; exit code for lint errors or invalid invocation; related to R8.2 and R8.22.
+- `task-file-count-decomposition-guide`: integer, approximately five files; a guideline for considering task decomposition; related to R9.15.
 
 Use these names when referring to the values in normative instructions. Requirements must not substitute raw numeric values for parameter or constant names.
 

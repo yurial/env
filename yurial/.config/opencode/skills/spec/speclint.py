@@ -201,26 +201,6 @@ def scan_spec(path: Path) -> list[Finding]:
     return findings
 
 
-def parse_fields(text: str) -> dict[str, str]:
-    """Parse index/glossary fields in plain, bold, or backtick Markdown forms."""
-    field_re = re.compile(
-        r"(?<![A-Za-z])(?P<key>Defined in|Path|Reference|Status|Summary)"
-        r"(?:\*\*|`)?\s*:\s*(?:\*\*|`)?",
-        re.I,
-    )
-    matches = list(field_re.finditer(text))
-    result: dict[str, str] = {}
-    for index, match in enumerate(matches):
-        key = match.group("key").lower()
-        end = matches[index + 1].start() if index + 1 < len(matches) else len(text)
-        value = text[match.end():end].strip()
-        value = re.sub(r"(?:\*\*|`)+$", "", value).strip()
-        value = value.rstrip(".;")
-        if value:
-            result[key] = value
-    return result
-
-
 def repo_root(path: Path) -> Path | None:
     try:
         p = path.resolve()
@@ -376,11 +356,11 @@ def discover(paths: Iterable[Path]) -> tuple[list[Path], list[Finding]]:
     return ordered, errors
 
 
-def collect_reference_ids(files: list[Path]) -> tuple[set[str] | None, list[Finding]]:
+def collect_reference_ids(files: list[Path]) -> set[str] | None:
     refs: set[str] = set()
     indexes = [p for p in files if p.name == "index.md"]
     if not indexes:
-        return None, []
+        return None
     for path in indexes:
         try:
             lines = path.read_text(encoding="utf-8-sig").splitlines()
@@ -400,7 +380,7 @@ def collect_reference_ids(files: list[Path]) -> tuple[set[str] | None, list[Find
             ref = cells[1]
             if re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", ref):
                 refs.add(ref)
-    return (refs if refs else None), []
+    return refs if refs else None
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -413,7 +393,7 @@ def main(argv: list[str] | None = None) -> int:
     files, findings = discover(Path(p) for p in args.path)
     if not files and not findings:
         findings.append(Finding(Path(args.path[0]), 1, "no Markdown files found"))
-    refs, _ = collect_reference_ids(files)
+    refs = collect_reference_ids(files)
     for path in files:
         if path.name == "index.md":
             findings.extend(scan_index(path))

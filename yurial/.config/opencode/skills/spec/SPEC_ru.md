@@ -1,7 +1,7 @@
 # Скилл `spec`
 
 Status: stable
-Spec source of truth for: скилл OpenCode `spec` — авторинг проектных спецификаций, spec-first flow и механические проверки спек
+Spec source of truth for: скилл `spec` — авторинг проектных спецификаций, spec-first flow и механические проверки спек
 
 ## Overview
 
@@ -29,10 +29,10 @@ Spec source of truth for: скилл OpenCode `spec` — авторинг про
 ## Configuration
 
 - `root-spec-growth-guide`: integer; approximately 300 lines; fixed; ориентир для предложения перенести корневую `SPEC.md` в дерево `specs/`; связан с R2.3.
-- `speclint-clean-exit-code`: integer; 0; fixed; код выхода при отсутствии находок; связан с R6.5.
-- `speclint-warning-exit-code`: integer; 1; fixed; код выхода при предупреждениях без ошибок; связан с R6.5.
-- `speclint-error-exit-code`: integer; 2; fixed; код выхода при ошибках линта или неверном вызове; связан с R6.1 и R6.5.
-- `task-file-count-decomposition-guide`: integer; approximately 5 files; fixed; ориентир для рассмотрения дополнительной декомпозиции задачи; связан с R8.7.
+- `speclint-clean-exit-code`: integer; 0; fixed; код выхода при отсутствии находок; связан с R8.22.
+- `speclint-warning-exit-code`: integer; 1; fixed; код выхода при предупреждениях без ошибок; связан с R8.22.
+- `speclint-error-exit-code`: integer; 2; fixed; код выхода при ошибках линта или неверном вызове; связан с R8.2 и R8.22.
+- `task-file-count-decomposition-guide`: integer; approximately 5 files; fixed; ориентир для рассмотрения дополнительной декомпозиции задачи; связан с R9.15.
 
 ## Requirements
 
