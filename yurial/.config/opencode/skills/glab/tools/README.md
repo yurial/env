@@ -313,7 +313,9 @@ mr-reply.sh <project> <mr_iid> <discussion_id> <body-or-@file> [--no-prefix] [--
 
 Replies into an existing thread: tries REST
 `discussions/<id>/notes` first, verifies the note landed **inside** the
-discussion (GET); on 404 or the silent-orphan result it falls back to
+discussion (GET; the body match ignores trailing newlines — GitLab
+stores note bodies with them trimmed while `@file` bodies end with
+one); on 404 or the silent-orphan result it falls back to
 GraphQL `createNote` with `gid://gitlab/Discussion/<discussion_id>` and
 verifies again. `--dry-run` prints both payloads.
 

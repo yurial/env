@@ -115,13 +115,16 @@ reply_body_file="$body_file"
 
 verify_inside() {
   # verify_inside -> prints note id if a note with our body sits inside $did
+  # (GitLab stores note bodies with trailing newlines trimmed, while @file
+  # bodies usually end with \n - trailing newlines are ignored on both
+  # sides of the comparison; the rest of the body must still match exactly)
   gt_get "$ep/discussions/$did" > "$GT_API_TMP/verify.jsonlines" || return 1
   python3 - "$GT_API_TMP/verify.jsonlines" "$reply_body_file" <<'PY'
 import json, sys
-want = open(sys.argv[2], encoding="utf-8").read()
+want = open(sys.argv[2], encoding="utf-8").read().rstrip("\r\n")
 d = json.loads(open(sys.argv[1]).readline())
 for n in d.get("notes") or []:
-    if (n.get("body") or "") == want:
+    if (n.get("body") or "").rstrip("\r\n") == want:
         print(n.get("id", ""))
         sys.exit(0)
 sys.exit(1)
