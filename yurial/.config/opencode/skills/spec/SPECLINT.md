@@ -93,6 +93,7 @@ Spec source of truth for: `speclint.py` — mechanical checking of Markdown spec
 - R8.1. verification=analysis; The script does not claim that mechanical checking establishes requirement clarity, atomicity, or semantic completeness.
 - R8.2. verification=analysis; The script does not claim that checking confirms the truth of statements in `Verification`, semantic justification of relationships, or language quality.
 - R8.3. verification=analysis; Limitations of the line-by-line scanner, including its inability to detect unindented continuations and its fenced-code-block recognition behavior, are documented and considered during review.
+- R8.4. verification=analysis; Documentation of the script does not attribute semantic checks to the tool that the script does not mechanically perform.
 
 ## Tests
 

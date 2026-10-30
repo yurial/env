@@ -198,7 +198,7 @@ Use this order for every specification change:
 2. **Structure and normative content.** Apply R3 and R4: validate the heading, status and source-of-truth line; use only permitted sections; put independent obligations only in `Requirements`; define public behavior observably; keep internal implementation notes non-normative; follow the ID, one-line entry, verification-marker, example, and test rules.
 3. **Interfaces and configuration.** Apply R5: document every public name, signature, type, domain, output and error code; repeat mandatory interface behavior in `Requirements`; define every parameter, constant and magic number with the correct fields and labels; link behavioral consequences to active `R-ID`s and use names instead of numeric values in requirements.
 4. **Terms and relationships.** Apply R6: validate the glossary table header and rows, full term IDs, definitions, sorting and `Defined in`; add new terms to the glossary in the same change where applicable; reuse owner IDs without redefining terms; use `Reference` rather than paths; synchronize both sides of each dependency; check language and anglicisms.
-5. **Mechanical check, then semantic check.** Apply R7 and R8: run `speclint.py` first, then separately review the changed spec and related specs. Use the complete `speclint.py` contract above. Re-check the associated `Verification` whenever a requirement changes. Report the two check types separately and never equate lint success with semantic correctness.
+5. **Mechanical check, then semantic check.** Apply R7 and the `speclint.py` contract (owned by SPECLINT.md): run `speclint.py` first, then separately review the changed spec and related specs. Use the complete `speclint.py` contract above. Re-check the associated `Verification` whenever a requirement changes. Report the two check types separately and never equate lint success with semantic correctness.
 6. **Deviation accounting.** Apply R7.5–R7.15: record only confirmed open discrepancies; use one stable `D-ID` per discrepancy and all required fields; append without renumbering; supersede corrected entries correctly; close only when code, tests and review establish conformance; keep implementation artifacts tied to normative `R-ID`s.
 7. **Planning and implementation.** Apply R9: perform Scope Check for multi-capability initiatives; inspect boundaries, interfaces, dependencies, terms, normal and edge scenarios, errors and success criteria; follow the checkpoint order and approval gate; record plan and task details; preserve requirement-to-task-to-test-to-implementation traceability; run prescribed checks and update `Tests` and `Verification` after implementation.
 8. **Review and report.** Apply R10: check cross-spec contradictions, contract drift, duplicate normative rules, identifiers and configuration consistency, glossary and relationship integrity, requirement quality, interface/configuration completeness, and `Verification` claims. Report changed specs and affected IDs, related artifacts, mechanical results, semantic results, tests, unchecked requirements, assumptions, risks and open deviations.
@@ -210,9 +210,9 @@ A specification is not reported as fully conforming while any applicable require
 Treat these as fixed configuration entries rather than independent informal defaults:
 
 - `root-spec-growth-guide`: integer, approximately 300 lines; a guideline for suggesting a move from a root `SPEC.md` to a `specs/` tree; related to R2.3.
-- `speclint-clean-exit-code`: integer `0`; exit code when there are no findings; related to R8.22.
-- `speclint-warning-exit-code`: integer `1`; exit code for warnings without errors; related to R8.22.
-- `speclint-error-exit-code`: integer `2`; exit code for lint errors or invalid invocation; related to R8.2 and R8.22.
+- `speclint-clean-exit-code`: integer `0`; exit code when there are no findings; related to SPECLINT.md R7.3.
+- `speclint-warning-exit-code`: integer `1`; exit code for warnings without errors; related to SPECLINT.md R7.4.
+- `speclint-error-exit-code`: integer `2`; exit code for lint errors or invalid invocation; related to SPECLINT.md R1.2 and R7.5.
 - `task-file-count-decomposition-guide`: integer, approximately five files; a guideline for considering task decomposition; related to R9.15.
 
 Use these names when referring to the values in normative instructions. Requirements must not substitute raw numeric values for parameter or constant names.
@@ -228,7 +228,7 @@ Use this index as a final coverage sweep against the current source `SPEC.md`. I
 - `R5.1–R5.8`: complete interface and configuration contracts, correct parameter/constant/magic-number fields, links to active requirements — `Interface and configuration`.
 - `R6.1–R6.13`: term IDs, glossary, owner terms, dependencies, mirrored relationships, language — `Terms and relationships between specs`.
 - `R7.1–R7.15`: lint-first order, semantic pass, current Verification, deviation lifecycle and traceability — `Mechanical and semantic checks`, `Open deviations`.
-- `R8.1–R8.27`: complete CLI, ordering, scanner, index/glossary checks, diagnostics, exit codes, limitations and test coverage — `speclint.py` contract.
+- `speclint.py` mechanical-check contract (CLI, ordering, scanner, index/glossary checks, diagnostics, exit codes, limitations, test coverage) — `speclint.py` contract; SPECLINT.md is the single source of truth for these rules.
 - `R9.1–R9.20`: Scope Check, approval checkpoints, plan/tasks, decomposition, traceability and implementation verification — `Planning and implementation`.
 - `R10.1–R10.13`: semantic review and final-report findings — `Review and final report`.
 
