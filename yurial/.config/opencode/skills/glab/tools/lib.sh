@@ -39,7 +39,7 @@ GITLAB_HOST="${GITLAB_HOST:-gitlab.corp.mail.ru}"
 GITLAB_REPO="${GITLAB_REPO:-}"
 GITLAB_DEFAULT_PROJECT="${GITLAB_DEFAULT_PROJECT:-}"
 # configured comment prefix: environment > config.sh > built-in default
-GITLAB_COMMENT_PREFIX="${GITLAB_COMMENT_PREFIX:-AI generated: }"
+GITLAB_COMMENT_PREFIX="${GITLAB_COMMENT_PREFIX:-[ai] }"
 # location-independent default: markers live next to the toolkit (<tools>/.state)
 GITLAB_TOOLS_STATE_DIR="${GITLAB_TOOLS_STATE_DIR:-$GT_TOOLS_DIR/.state}"
 export GITLAB_HOST GITLAB_DEFAULT_PROJECT GITLAB_TOOLS_STATE_DIR

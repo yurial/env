@@ -1,1 +1,1 @@
-AI generated: batch check on the old side of the removed release-guard line.
+[ai] batch check on the old side of the removed release-guard line.

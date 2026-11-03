@@ -24,7 +24,7 @@ Every assignment only fills an unset/empty variable, so the precedence is:
 | `GITLAB_HOST`            | `gitlab.corp.mail.ru`     | instance host for every API call                   |
 | `GITLAB_DEFAULT_PROJECT` | (empty)                   | `<project>` positional may be omitted when set; the remaining positionals shift left (mr-card/mr-diff/mr-updates/mr-threads/mr-verify-posted: 1 arg, mr-draft-review/mr-resolve/mr-verify-report: 2 args, mr-reply: 3 args, mr-comment: 4 args) |
 | `GITLAB_REPO`            | (cwd)                     | git clone used for sha recovery / hunks / diffstat / the local MR diff |
-| `GITLAB_COMMENT_PREFIX`  | `AI generated: `          | prefix every machine-generated comment must start with: write scripts refuse bodies without it, `--no-prefix` is the only opt-out, and the `--ai-only` filters select by it; prescribed per host/repository by its owner |
+| `GITLAB_COMMENT_PREFIX`  | `[ai] `                   | prefix every machine-generated comment must start with: write scripts refuse bodies without it, `--no-prefix` is the only opt-out, and the `--ai-only` filters select by it; prescribed per host/repository by its owner |
 | `GITLAB_TOOLS_STATE_DIR` | `<tools>/.state` (next to `lib.sh`) | directory for `--state` marker files given as a bare filename (mr-updates.sh; mr-has-updates.sh resolves bare names under its `has-updates/` subdir) |
 | `GITLAB_TOKEN`           | glab config               | auth token, honored by glab itself                 |
 
@@ -95,7 +95,7 @@ performed at all.
    The read-only after-the-fact re-check of what actually landed is
    `mr-verify-posted.sh`.
 8. **Every posted comment must start with the configured prefix**
-   (`GITLAB_COMMENT_PREFIX`, default `AI generated: `; environment >
+   (`GITLAB_COMMENT_PREFIX`, default `[ai] `; environment >
    `config.sh` > built-in default). All write scripts refuse to post
    otherwise, unless `--no-prefix` is passed; the `--ai-only` filters of
    `mr-verify-posted.sh` and `mr-threads.sh` select notes by the same
@@ -410,7 +410,7 @@ side; old side when there is no new line), authors, full note bodies
 (truncated to 400 chars by default; `--max-chars N` / `--full`). `--open`
 (default) keeps only unresolved threads; `--ai-only` keeps threads
 containing a note that starts with the configured prefix
-(`GITLAB_COMMENT_PREFIX`, default `AI generated: `); `--no-system` drops
+(`GITLAB_COMMENT_PREFIX`, default `[ai] `); `--no-system` drops
 notes with `system: true` from the dump — CI-bot progress comments bury
 the human review threads otherwise — and a thread consisting only of
 system notes is not printed at all; the trailing count line keeps its
@@ -647,8 +647,9 @@ into the test worktree (only read-only git commands were run there; state
 files live under `GITLAB_TOOLS_STATE_DIR`).
 
 Canary protocol (the only real MR write performed while building the write
-paths): one draft (`AI generated: Canary test of the toolkit, will be
-deleted immediately.`, anchored on `pipeline_follower.cpp:102`) was created
+paths): one draft (a canary note — `Canary test of the toolkit, will be
+deleted immediately.` behind the then-current comment prefix — anchored on
+`pipeline_follower.cpp:102`) was created
 with `mr-draft-review.sh` (no `--publish`), verified via GET
 (`draft_notes/830102`), deleted by id with the documented
 `DELETE .../draft_notes/830102` (rc=0, empty body), and the follow-up GET
@@ -703,7 +704,8 @@ aspect) on a tampered marker, and re-upgraded a schema-2 marker without a
 false change; `mr-threads.sh --all` showed 11 system notes that
 `--no-system` dropped, with the system-only threads leaving the shown count
 (18 -> 7); `GITLAB_COMMENT_PREFIX='[ai] '` (the prefix the repository owner
-actually uses on that MR) drove the write-path prefix refusals and the
+actually uses on that MR; it became the toolkit's built-in default
+afterwards) drove the write-path prefix refusals and the
 `--ai-only` selections in `mr-comment.sh`, `mr-draft-review.sh`,
 `mr-threads.sh`, and `mr-verify-posted.sh`; `--repo <dir>` was validated
 (exit 2 on a nonexistent directory) in all twelve scripts that accept it.

@@ -8,7 +8,7 @@
 #   --all           all discussions, resolved included
 #   --ai-only       only discussions containing a note that starts with the
 #                   configured comment prefix (GITLAB_COMMENT_PREFIX,
-#                   default "AI generated: ")
+#                   default "[ai] ")
 #   --no-system     drop notes with system:true from the dump; a thread
 #                   consisting only of system notes is not printed at all
 #                   (CI-bot progress comments bury the human review threads

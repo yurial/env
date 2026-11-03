@@ -73,7 +73,7 @@ usage: mr-verify-posted.sh <project> <mr_iid> [--expect <expected.json>]
   --drafts        print the pending draft_notes count (+ ids) of your user
   --max-note-id   print the highest note id on the MR
   --ai-only       --expect matches only notes with the configured prefix
-                  (GITLAB_COMMENT_PREFIX, default "AI generated: ");
+                  (GITLAB_COMMENT_PREFIX, default "[ai] ");
                   --max-note-id considers only those notes as well
   --max-chars N   truncate body previews to N chars (default 400)
   --full          never truncate previews

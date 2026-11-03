@@ -16,7 +16,7 @@
 #   * a POST may answer rc=0 with {"message":"500 Internal Server Error"}
 #     while the note WAS created - creation is verified by a follow-up GET,
 #     never by the POST response alone.
-#   * every posted comment must start with "AI generated: " unless
+#   * every posted comment must start with "[ai] " unless
 #     --no-prefix is given.
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -36,7 +36,7 @@ usage: mr-comment.sh <project> <mr_iid> <path> <line> <body-or-@file>
 options:
   --old-side    anchor on the old (removed) line
   --no-prefix   skip the mandatory comment-prefix check
-                (GITLAB_COMMENT_PREFIX, default "AI generated: ")
+                (GITLAB_COMMENT_PREFIX, default "[ai] ")
   --force       if the anchor is invalid, post unpositioned with the body
                 prefixed by "path:line" instead of refusing
   --dry-run     print the exact payload (incl. position) and do not POST

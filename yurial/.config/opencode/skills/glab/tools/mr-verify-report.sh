@@ -11,10 +11,10 @@
 #   {"action": "new", "path": "a/b.cpp", "line": 102,
 #    "old_side": true (optional), "text": "..."}
 #
-# "text" is the body WITHOUT the "AI generated: " prefix - the prefix is
+# "text" is the body WITHOUT the "[ai] " prefix - the prefix is
 # added by this script (a text already carrying it is not doubled).
 # acknowledge/contest locate the target thread by thread_hint: a discussion
-# containing a note that starts with "AI generated: " and contains the hint
+# containing a note that starts with "[ai] " and contains the hint
 # substring; zero or several matching discussions is an error (the plan is
 # never built on a guess). "new" validates the anchor like mr-comment.sh
 # (out-of-diff / out-of-hunk anchors are refused with the valid ranges).

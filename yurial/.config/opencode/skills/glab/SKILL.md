@@ -188,35 +188,37 @@ long form sets the branch flag; in `mr merge` `-d` is
 `--remove-source-branch` — the fallback for an MR created without the flag:
 `glab mr merge <iid> -d`.
 
-## 9. Leaving comments — mandatory `AI generated:` prefix
+## 9. Leaving comments — mandatory `[ai]` prefix
 
 Every comment posted via glab — a note on an MR, a comment on an issue, or a
-reply in a discussion — must begin with the prefix `AI generated:` followed
-by a space and the comment text. The prefix marks the comment as
+reply in a discussion — must begin with the prefix `[ai] ` (brackets plus a
+trailing space) followed by the comment text. The prefix marks the comment as
 machine-generated: never post a comment without it.
 
 ```bash
-glab mr note <iid> -m "AI generated: <comment text>"    # note on an MR (<iid> or branch)
-glab issue note <iid> -m "AI generated: <comment text>" # comment on an issue
+glab mr note <iid> -m "[ai] <comment text>"             # note on an MR (<iid> or branch)
+glab issue note <iid> -m "[ai] <comment text>"          # comment on an issue
 # reply in an existing MR discussion — via the API (:fullpath = current repository):
 glab api -X POST "projects/:fullpath/merge_requests/<iid>/discussions/<discussion_id>/notes" \
-  --raw-field body="AI generated: <comment text>"
+  --raw-field body="[ai] <comment text>"
 ```
 
 Rules:
 
 - The prefix is mandatory for every posted comment, without exceptions for
   short one-line comments; in a multi-line comment the first line still
-  begins with `AI generated:`.
+  begins with `[ai] `.
 - The marker TEXT is configurable per host/repository: the MR/repository
-  owner may prescribe a different prefix (observed: `[ai] `), set through
+  owner may prescribe a different prefix, set through
   `GITLAB_COMMENT_PREFIX` (environment > `tools/config.sh` > the built-in
-  default `AI generated: `). The bundled tools check and filter by the
-  configured text; the rule itself does not change — every machine-generated
-  comment carries the configured marker, without exceptions.
+  default `[ai] ` — a value first observed as an owner-prescribed marker on
+  a repository whose owner required it). The bundled tools check and filter
+  by the configured text; the rule itself does not change — every
+  machine-generated comment carries the configured marker, without
+  exceptions.
 
 ```bash
-GITLAB_COMMENT_PREFIX='[ai] ' mr-comment.sh <group/project> <iid> <path> <line> "[ai] <comment text>"
+GITLAB_COMMENT_PREFIX='<prefix> ' mr-comment.sh <group/project> <iid> <path> <line> "<prefix> <comment text>"
 # the env var sets the prefix for this one command (precedence: environment > config.sh > default - see above)
 ```
 
@@ -265,14 +267,14 @@ single-MR endpoint provides them, the list endpoint returns
 ```bash
 glab api -X POST "projects/:fullpath/merge_requests/<iid>/discussions" --input <file>
 # <file> — JSON body passed verbatim (--input, section 12):
-# {"body":"AI generated: <comment text>",
+# {"body":"[ai] <comment text>",
 #  "position":{"base_sha":"<sha>","start_sha":"<sha>","head_sha":"<sha>",
 #              "position_type":"text","new_path":"<path>","new_line":<n>}}
 ```
 
 - For a comment on the old side of the diff use `old_path` + `old_line`
   instead of `new_path` + `new_line`.
-- The mandatory `AI generated:` prefix (shown with the default prefix; the
+- The mandatory `[ai] ` prefix (shown with the default prefix; the
   configured one per section 9) applies to line-anchored comments as to
   every other.
 
@@ -336,7 +338,7 @@ glab api "projects/:fullpath/merge_requests/<iid>/draft_notes"
 # draft body: TOP-LEVEL "note" STRING + optional top-level "position"
 # (diff_refs from the single-MR endpoint, section 10)
 cat > <file> <<'EOF'
-{"note":"AI generated: <comment text>",
+{"note":"[ai] <comment text>",
  "position":{"base_sha":"<sha>","start_sha":"<sha>","head_sha":"<sha>",
              "position_type":"text","new_path":"<path>","new_line":<n>}}
 EOF
@@ -399,7 +401,7 @@ discussions endpoint (section 17) — mechanized by `mr-verify-posted.sh`
 (section 22), which also reports the pending-draft count and the max note
 id baseline.
 
-- The mandatory `AI generated:` prefix (shown with the default prefix; the
+- The mandatory `[ai] ` prefix (shown with the default prefix; the
   configured one per section 9) applies to every draft note as to every
   other comment.
 - `diff_refs` freshness (section 10) applies to draft positions the same
@@ -619,10 +621,10 @@ glab api graphql --input <file>
 # <file> — the GraphQL request as raw JSON (--input, section 12):
 # {"query":"mutation($input: CreateNoteInput!){createNote(input:$input){note{id}errors}}",
 #  "variables":{"input":{"discussionId":"gid://gitlab/Discussion/<discussion_id>",
-#                        "body":"AI generated: <comment text>"}}}
+#                        "body":"[ai] <comment text>"}}}
 ```
 
-The mandatory `AI generated:` prefix (shown with the default prefix; the
+The mandatory `[ai] ` prefix (shown with the default prefix; the
 configured one per section 9) applies to GraphQL replies as to every other
 comment.
 
@@ -644,7 +646,7 @@ glab issue list --assignee=@me      # my assigned issues; likewise --author=<use
 glab issue list -F ids              # machine-friendly: one iid per line (also: -F urls)
 glab issue view <iid>               # issue card (--comments); a full issue URL also works
 glab issue create -t "<title>" -d "<description>" -y   # non-interactive create
-glab issue note <iid> -m "AI generated: <comment text>" # comment — prefix mandatory (section 9)
+glab issue note <iid> -m "[ai] <comment text>"           # comment — prefix mandatory (section 9)
 glab issue close <iid>              # also: glab issue reopen <iid>
 ```
 
@@ -715,7 +717,7 @@ omitted), `GITLAB_REPO` (clone for sha recovery, hunk building, the MR card
 diffstat, and the local MR diff; default: the clone containing the current
 directory), `GITLAB_COMMENT_PREFIX` (the configured comment prefix checked
 on every write and used by the `--ai-only` filters; default
-`AI generated: ` — the marker text may be prescribed per host/repository by
+`[ai] ` — the marker text may be prescribed per host/repository by
 its owner), `GITLAB_TOOLS_STATE_DIR` (default `<tools>/.state`, created on
 demand). Every script accepts the optional `--repo <dir>` flag with
 identical semantics — it overrides `GITLAB_REPO` for the invocation

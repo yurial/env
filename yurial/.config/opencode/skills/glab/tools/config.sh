@@ -18,7 +18,7 @@
 #                         --ai-only filters select by it (R12.5). Prescribed
 #                         per host/repository by its owner; unset keeps the
 #                         built-in default of lib.sh:
-# GITLAB_COMMENT_PREFIX="AI generated: "
+# GITLAB_COMMENT_PREFIX="[ai] "
 
 _gt_tools_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 : "${GITLAB_HOST:=gitlab.corp.mail.ru}"

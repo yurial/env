@@ -12,7 +12,7 @@
 #     falls back to GraphQL createNote with
 #     gid://gitlab/Discussion/<discussion_id>, then verifies again.
 #   * every posted comment must start with the configured prefix
-#     (GITLAB_COMMENT_PREFIX, default "AI generated: ") unless --no-prefix
+#     (GITLAB_COMMENT_PREFIX, default "[ai] ") unless --no-prefix
 #     is given.
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

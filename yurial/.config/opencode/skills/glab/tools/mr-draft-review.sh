@@ -6,8 +6,8 @@
 #                           [--ignore-stray]
 #
 # comments.json = JSON array of:
-#   {"path": "a/b.cpp", "line": 102, "body": "AI generated: ...", "old_side": true}
-#   {"reply_to_discussion_id": "<id>", "body": "AI generated: ..."}
+#   {"path": "a/b.cpp", "line": 102, "body": "[ai] ...", "old_side": true}
+#   {"reply_to_discussion_id": "<id>", "body": "[ai] ..."}
 #
 # Draft items: every anchor is validated locally (hunks built from
 # git diff --unified=0 <merge-base>..<head>), a validation table
@@ -29,7 +29,7 @@
 # with an explicit warning first (bulk_publish publishes ALL pending drafts
 # of your user on the MR). Without --publish the draft ids are printed (each
 # deletable: glab api -X DELETE .../draft_notes/<id>).
-# Bodies must start with "AI generated: " unless --no-prefix is given.
+# Bodies must start with "[ai] " unless --no-prefix is given.
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=lib.sh
