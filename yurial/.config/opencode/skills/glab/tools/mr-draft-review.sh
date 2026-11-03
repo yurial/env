@@ -52,9 +52,13 @@ with    --publish: publish ONLY the drafts created by this run, one by one
                    to bulk_publish with a warning when the route is missing)
 with    --dry-run: validate and print payloads only, no writes at all
 --ignore-stray:     proceed even when older pending drafts already exist
+--repo DIR:         clone used for sha recovery / hunk building
+                    (clone is configured via GITLAB_REPO env or config.sh)
 EOF
   exit 2
 }
+
+die_usage() { printf 'ERROR: %s\n' "$*" >&2; usage; }
 
 proj="" iid="" input="" repo_arg=""
 publish=0 dry=0 no_prefix=0 ignore_stray=0
@@ -81,6 +85,10 @@ if [ -n "$iid" ] && [ -z "$input" ] && [ -n "$GITLAB_DEFAULT_PROJECT" ]; then
 fi
 [ -n "$proj" ] && [ -n "$iid" ] && [ -n "$input" ] || usage
 [ -f "$input" ] || gt_die "comments file not found: $input"
+# --repo semantics are identical in every script that accepts the flag
+# (R12.4): precedence flag > GITLAB_REPO env > config.sh > clone containing
+# $PWD, and a nonexistent directory is a usage error
+gt_repo_arg_ok "$repo_arg" || die_usage "--repo: no such directory: $repo_arg"
 
 enc="$(gt_urlencode "$proj")"
 ep="projects/$enc/merge_requests/$iid"
@@ -208,7 +216,7 @@ for c in json.load(open(entries, encoding="utf-8")):
         except OSError:
             pass
     ok = any(s == side and a <= c["line"] <= b for s, a, b in ranges)
-    # never a blind positioned POST (GLAB-S-66): an anchor that could not be
+    # never a blind positioned POST (R15.6): an anchor that could not be
     # validated (no clone / no local diff) is posted unpositioned with
     # "path:line" prepended, like mr-comment.sh
     positioned = 1 if ok else 0

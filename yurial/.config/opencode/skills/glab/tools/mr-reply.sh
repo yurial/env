@@ -2,7 +2,7 @@
 # mr-reply.sh - reply into an existing MR discussion thread.
 #
 # usage: mr-reply.sh <project> <mr_iid> <discussion_id> <body-or-@file>
-#                    [--no-prefix] [--dry-run]
+#                    [--no-prefix] [--dry-run] [--repo <dir>]
 #
 # Traps handled:
 #   * the REST reply route POST .../discussions/<id>/notes may answer 404,
@@ -11,8 +11,9 @@
 #     verified INSIDE the discussion by GET, and on 404/orphan the script
 #     falls back to GraphQL createNote with
 #     gid://gitlab/Discussion/<discussion_id>, then verifies again.
-#   * every posted comment must start with "AI generated: " unless
-#     --no-prefix is given.
+#   * every posted comment must start with the configured prefix
+#     (GITLAB_COMMENT_PREFIX, default "AI generated: ") unless --no-prefix
+#     is given.
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=lib.sh
@@ -21,32 +22,40 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 usage() {
   cat >&2 <<'EOF'
 usage: mr-reply.sh <project> <mr_iid> <discussion_id> <body-or-@file>
-                   [--no-prefix] [--dry-run]
+                   [--no-prefix] [--dry-run] [--repo <dir>]
 
   body-or-@file  reply text, or @path/to/file (or @- for stdin)
-  --no-prefix    skip the mandatory "AI generated: " prefix check
+  --no-prefix    skip the mandatory comment-prefix check
   --dry-run      print the REST payload and the GraphQL fallback, post nothing
+  --repo DIR     accepted for interface uniformity (no clone needed;
+                 clone is configured via GITLAB_REPO env or config.sh)
 EOF
   exit 2
 }
 
-proj="" iid="" did="" bodyarg=""
+die_usage() { printf 'ERROR: %s\n' "$*" >&2; usage; }
+
+proj="" iid="" did="" bodyarg="" repo_arg=""
 no_prefix=0 dry=0
 while [ $# -gt 0 ]; do
   case "$1" in
     --no-prefix) no_prefix=1 ;;
     --dry-run) dry=1 ;;
+    --repo) [ $# -ge 2 ] || die_usage "--repo needs a directory"; repo_arg="$2"; shift ;;
     -h|--help) usage ;;
-    -*) gt_die "unknown option: $1" ;;
+    -*) die_usage "unknown option: $1" ;;
     *) if [ -z "$proj" ]; then proj="$1"
        elif [ -z "$iid" ]; then iid="$1"
        elif [ -z "$did" ]; then did="$1"
        elif [ -z "$bodyarg" ]; then bodyarg="$1"
-       else gt_die "unexpected argument: $1"
+       else die_usage "unexpected argument: $1"
        fi ;;
   esac
   shift
 done
+# --repo is validated everywhere it is accepted, even though this script
+# makes no clone use of the value (R12.4)
+gt_repo_arg_ok "$repo_arg" || die_usage "--repo: no such directory: $repo_arg"
 # <project> may be omitted when GITLAB_DEFAULT_PROJECT is configured
 if [ -n "$did" ] && [ -z "$bodyarg" ] && [ -n "$proj" ] && [ -n "$iid" ] \
    && [ -n "$GITLAB_DEFAULT_PROJECT" ]; then

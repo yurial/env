@@ -38,10 +38,14 @@ fi
 GITLAB_HOST="${GITLAB_HOST:-gitlab.corp.mail.ru}"
 GITLAB_REPO="${GITLAB_REPO:-}"
 GITLAB_DEFAULT_PROJECT="${GITLAB_DEFAULT_PROJECT:-}"
+# configured comment prefix: environment > config.sh > built-in default
+GITLAB_COMMENT_PREFIX="${GITLAB_COMMENT_PREFIX:-AI generated: }"
 # location-independent default: markers live next to the toolkit (<tools>/.state)
 GITLAB_TOOLS_STATE_DIR="${GITLAB_TOOLS_STATE_DIR:-$GT_TOOLS_DIR/.state}"
 export GITLAB_HOST GITLAB_DEFAULT_PROJECT GITLAB_TOOLS_STATE_DIR
-GT_PREFIX="AI generated: "
+GT_PREFIX="$GITLAB_COMMENT_PREFIX"
+# usage hint line of every script accepting --repo (R12.4)
+GT_REPO_HINT="clone is configured via GITLAB_REPO env or config.sh"
 
 GT_API_TMP="$(mktemp -d "${TMPDIR:-/tmp}/gt-api.XXXXXX")"
 trap 'rm -rf "$GT_API_TMP"' EXIT
@@ -215,6 +219,25 @@ gt_prefix_error() {
 # ---------------------------------------------------------------------------
 # Local git helpers (read-only unless the caller opts into a fetch)
 # ---------------------------------------------------------------------------
+
+# gt_repo_arg_ok DIR - 0 iff DIR is empty or names an existing directory.
+# The --repo validation of R12.4: a --repo naming a nonexistent directory is
+# a usage error (exit 2) in every script that accepts the flag, including the
+# scripts that make no clone use of the value (interface uniformity).
+gt_repo_arg_ok() { [ -z "${1:-}" ] || [ -d "$1" ]; }
+
+# gt_repo_pick FLAG_VALUE - resolve the clone directory for this run with the
+# shared precedence flag > GITLAB_REPO env > config.sh > the clone containing
+# the current directory (gt_git_dir; the built-in default of R12.3). Prints
+# the resolved directory (possibly empty when no clone is around); the caller
+# decides whether an empty result is fatal. The flag value must be validated
+# with gt_repo_arg_ok first.
+gt_repo_pick() {
+  local repo="${1:-}"
+  [ -n "$repo" ] && { printf '%s\n' "$repo"; return 0; }
+  [ -n "${GITLAB_REPO:-}" ] && { printf '%s\n' "$GITLAB_REPO"; return 0; }
+  gt_git_dir
+}
 
 # gt_git_dir - print a usable git toplevel (GITLAB_REPO, else cwd upward);
 # empty string when none.

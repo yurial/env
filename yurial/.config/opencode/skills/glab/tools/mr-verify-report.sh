@@ -43,9 +43,12 @@ usage: mr-verify-report.sh <project> <mr_iid> <verdicts.json>
   --post        post now even when --emit is also given
   --yes         required for any MR write (replies + draft creation)
   --repo DIR    clone used for sha recovery / hunk building of "new" items
+                (clone is configured via GITLAB_REPO env or config.sh)
 EOF
   exit 2
 }
+
+die_usage() { printf 'ERROR: %s\n' "$*" >&2; usage; }
 
 proj="" iid="" input="" emit="" repo_arg=""
 post=0 yes=0
@@ -71,6 +74,10 @@ if [ -n "$iid" ] && [ -z "$input" ] && [ -n "$GITLAB_DEFAULT_PROJECT" ]; then
 fi
 [ -n "$proj" ] && [ -n "$iid" ] && [ -n "$input" ] || usage
 [ -f "$input" ] || gt_die "verdicts file not found: $input"
+# --repo semantics are identical in every script that accepts the flag
+# (R12.4): precedence flag > GITLAB_REPO env > config.sh > clone containing
+# $PWD, and a nonexistent directory is a usage error
+gt_repo_arg_ok "$repo_arg" || die_usage "--repo: no such directory: $repo_arg"
 
 enc="$(gt_urlencode "$proj")"
 ep="projects/$enc/merge_requests/$iid"
@@ -153,7 +160,7 @@ plan = json.load(open(sys.argv[1], encoding="utf-8"))
 disc = [json.loads(l) for l in open(sys.argv[2]) if l.strip()]
 out, prefix = sys.argv[3], sys.argv[4]
 # discussions with our original notes: full bodies, so thread_hint matches
-# anywhere in the note text (a substring of the original note, GLAB-S-64)
+# anywhere in the note text (a substring of the original note, R13.7)
 ours = {}
 for d in disc:
     hits = []

@@ -3,7 +3,7 @@
 #
 # usage: mr-list.sh [--role reviewer|author|assignee]
 #                   [--state opened|closed|merged|all] [--draft|--no-draft]
-#                   [--json] [--project <group/proj>] [--max N]
+#                   [--json] [--project <group/proj>] [--max N] [--repo <dir>]
 #
 #   --role R        reviewer | author | assignee (default: reviewer)
 #   --state S       opened | closed | merged | all (default: opened)
@@ -16,6 +16,9 @@
 #                   endpoint returns no project object, only project_id;
 #                   default: all accessible projects)
 #   --max N         show at most N MRs, newest updates first
+#   --repo DIR      accepted for interface uniformity (this script needs no
+#                   clone; clone is configured via GITLAB_REPO env or
+#                   config.sh)
 #
 # The scenario behind the defaults: "which MRs await my review" - the global
 # merge_requests endpoint queried by the CURRENT user's role (the username
@@ -39,13 +42,17 @@ usage() {
   cat >&2 <<'EOF'
 usage: mr-list.sh [--role reviewer|author|assignee] [--state opened|closed|merged|all]
                   [--draft|--no-draft] [--json] [--project <group/proj>] [--max N]
+                  [--repo <dir>]
+
+  --repo DIR  accepted for interface uniformity (no clone needed;
+              clone is configured via GITLAB_REPO env or config.sh)
 EOF
   exit 2
 }
 
 arg_error() { printf 'ERROR: %s\n' "$*" >&2; usage; }
 
-role="reviewer" state="opened" draft_mode="any" json=0 project="" max_n=0
+role="reviewer" state="opened" draft_mode="any" json=0 project="" max_n=0 repo_arg=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --role) [ $# -ge 2 ] || arg_error "--role needs a value"; role="$2"; shift ;;
@@ -57,12 +64,16 @@ while [ $# -gt 0 ]; do
     --max) [ $# -ge 2 ] || arg_error "--max needs a value"; max_n="$2"; shift
            { [[ "$max_n" =~ ^[0-9]+$ ]] && [ "$max_n" -ge 1 ]; } \
              || arg_error "--max expects a positive number, got: $max_n" ;;
+    --repo) [ $# -ge 2 ] || arg_error "--repo needs a directory"; repo_arg="$2"; shift ;;
     -h|--help) usage ;;
     -*) arg_error "unknown option: $1" ;;
     *) arg_error "unexpected argument: $1 (mr-list.sh takes options only)" ;;
   esac
   shift
 done
+# --repo is validated everywhere it is accepted, even though this script
+# makes no clone use of the value (R12.4)
+gt_repo_arg_ok "$repo_arg" || arg_error "--repo: no such directory: $repo_arg"
 case "$role" in
   reviewer|author|assignee) ;;
   *) arg_error "bad role '$role' (expected reviewer|author|assignee)" ;;

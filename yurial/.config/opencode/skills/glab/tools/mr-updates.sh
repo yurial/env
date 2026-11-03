@@ -1,14 +1,26 @@
 #!/usr/bin/env bash
 # mr-updates.sh - MR state plus the delta of commits and notes since a marker.
 #
-# usage: mr-updates.sh <project> <mr_iid> [--since <iso8601|sha>] [--state <file>] [--fetch]
+# usage: mr-updates.sh <project> <mr_iid> [--since <iso8601|sha>] [--state <file>]
+#                      [--fetch] [--repo <dir>]
 #
 #   --since      only show commits/notes newer than an ISO8601 timestamp or a
 #                commit sha (newest-first walk stops right before the sha)
 #   --state      marker file: after printing, stores the MR head sha (+ its
-#                short_id) and the max note id/created_at; the next run
-#                reports only the delta (no marker file = full dump)
+#                short_id), the max note id/created_at, and the merge-status
+#                snapshot + approvals set (schema 3); the next run reports
+#                only the delta (no marker file = full dump)
 #   --fetch      inside a git clone, refresh origin/<source_branch> first
+#   --repo DIR   clone used for the local commit walk
+#                (clone is configured via GITLAB_REPO env or config.sh)
+#
+# Sections: == MR state ==, == commits (new since) ==, == notes (new since)
+# ==, == thread status changes == (only when the delta has resolution
+# events), == merge status == (only when the delta changes
+# detailed/legacy merge status, blocking_discussions_resolved, or the
+# approvals set - one line per changed aspect; markers written by older
+# versions load unchanged, a field absent from an older marker counts as
+# "not changed").
 #
 # Traps handled: 40-hex shas masked as __SECRET_N__ (flaky per response;
 # short_id always survives - head comes from the commits endpoint id, the
@@ -23,26 +35,34 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 usage() {
   cat >&2 <<'EOF'
-usage: mr-updates.sh <project> <mr_iid> [--since <iso8601|sha>] [--state <file>] [--fetch]
+usage: mr-updates.sh <project> <mr_iid> [--since <iso8601|sha>] [--state <file>]
+                     [--fetch] [--repo <dir>]
+
+  --repo DIR  clone for the local commit walk
+              (clone is configured via GITLAB_REPO env or config.sh)
 EOF
   exit 2
 }
 
-proj="" iid="" since="" state_file="" opt_fetch=0
+die_usage() { printf 'ERROR: %s\n' "$*" >&2; usage; }
+
+proj="" iid="" since="" state_file="" repo_arg="" opt_fetch=0
 while [ $# -gt 0 ]; do
   case "$1" in
-    --since) [ $# -ge 2 ] || usage; since="$2"; shift ;;
-    --state) [ $# -ge 2 ] || usage; state_file="$2"; shift ;;
+    --since) [ $# -ge 2 ] || die_usage "--since needs a value"; since="$2"; shift ;;
+    --state) [ $# -ge 2 ] || die_usage "--state needs a file path"; state_file="$2"; shift ;;
     --fetch) opt_fetch=1 ;;
+    --repo) [ $# -ge 2 ] || die_usage "--repo needs a directory"; repo_arg="$2"; shift ;;
     -h|--help) usage ;;
-    -*) gt_die "unknown option: $1" ;;
+    -*) die_usage "unknown option: $1" ;;
     *) if [ -z "$proj" ]; then proj="$1"
        elif [ -z "$iid" ]; then iid="$1"
-       else gt_die "unexpected argument: $1"
+       else die_usage "unexpected argument: $1"
        fi ;;
   esac
   shift
 done
+gt_repo_arg_ok "$repo_arg" || die_usage "--repo: no such directory: $repo_arg"
 # <project> may be omitted when GITLAB_DEFAULT_PROJECT is configured
 if [ -n "$proj" ] && [ -z "$iid" ] && [ -n "$GITLAB_DEFAULT_PROJECT" ]; then
   iid="$proj"; proj="$GITLAB_DEFAULT_PROJECT"
@@ -63,12 +83,41 @@ fi
 enc="$(gt_urlencode "$proj")"
 mr_ep="projects/$enc/merge_requests/$iid"
 
+# approvals (usernames only, no secrets in the marker): needed for the
+# merge-status delta and the schema-3 marker store; one GET. Unlike an
+# optional fetch, a failure here must NOT degrade to an empty approvals set
+# (that would fabricate a "-username" delta and rewrite the marker on top
+# of it): the script exits 1 with the diagnostics and the marker untouched
+# (the same discipline as the GET wrappers of mr-has-updates.sh).
+approvals_usernames=""
+if [ -n "$state_file" ]; then
+  gt_api GET "$mr_ep/approvals"
+  if [ "$GT_RC" -ne 0 ] || [ "$GT_HTTP_CODE" != "0" ] || gt_body_is_error "$GT_BODY"; then
+    printf 'ERROR: GET %s failed (rc=%s, http=%s): %s %s\n' \
+      "$mr_ep/approvals" "${GT_RC:-?}" "${GT_HTTP_CODE:-?}" \
+      "$(tr -d '\n' <"$GT_ERR" | tail -c 200)" \
+      "$(tr -d '\n' <"$GT_BODY" | tail -c 200)" >&2
+    exit 1
+  fi
+  approvals_usernames="$(python3 - "$GT_BODY" <<'PY'
+import json, sys
+try:
+    a = json.loads(open(sys.argv[1]).readline())
+except Exception:
+    a = {}
+print(",".join(sorted((x.get("user") or {}).get("username") or ""
+                      for x in a.get("approved_by") or [])))
+PY
+)"
+fi
+
 # ---- MR state ----------------------------------------------------------
 gt_get "$mr_ep" > "$GT_API_TMP/mr.json"
 python3 - "$GT_API_TMP/mr.json" > "$GT_API_TMP/mr.fields" <<'PY'
 import json, sys
 mr = json.loads(open(sys.argv[1]).readline())
 dr = mr.get("diff_refs") or {}
+blocking = mr.get("blocking_discussions_resolved")
 vals = [
     mr.get("title") or "",
     mr.get("state") or "",
@@ -77,12 +126,16 @@ vals = [
     mr.get("source_branch") or "",
     mr.get("target_branch") or "",
     dr.get("head_sha") or "",
+    mr.get("merge_status") or "",
+    mr.get("detailed_merge_status") or "",
+    "null" if blocking is None else ("true" if blocking else "false"),
 ]
 print("\n".join(vals))
 PY
 mapfile -t f < "$GT_API_TMP/mr.fields"
 mr_title="${f[0]}"; mr_state="${f[1]}"; mr_draft="${f[2]}"; mr_updated="${f[3]}"
 src_branch="${f[4]}"; tgt_branch="${f[5]}"; api_head="${f[6]}"
+mr_ms="${f[7]}"; mr_dms="${f[8]}"; mr_blocking="${f[9]}"
 
 # real head sha; the API masks 40-hex values per response, short_id survives
 head_sha=""; head_short=""; head_created=""; head_src=""
@@ -104,7 +157,7 @@ PY
   fi
   head_short="${hf[1]:-}"; head_created="${hf[2]:-}"
 fi
-repo="$(gt_git_dir)"
+repo="$(gt_repo_pick "$repo_arg")"
 if ! gt_is_sha "$head_sha" && [ -n "$head_short" ] && [ -n "$repo" ]; then
   s="$(gt_git_sha "$repo" "$head_short")"
   if [ -n "$s" ]; then head_sha="$s"; head_src="commits endpoint short_id resolved locally"; fi
@@ -141,6 +194,7 @@ fi
 
 # ---- delta basis -------------------------------------------------------
 c_cut_sha=""; c_cut_iso=""; n_cut_id="0"; n_cut_iso=""
+old_ms=""; old_dms=""; old_blocking="__absent__"; old_approvals="__absent__"
 basis="full dump (no marker)"
 if [ -n "$state_file" ] && [ -f "$state_file" ]; then
   python3 - "$state_file" > "$GT_API_TMP/state.fields" <<'PY'
@@ -149,16 +203,24 @@ try:
     st = json.load(open(sys.argv[1]))
 except Exception:
     st = {}
-for k in ("head_sha", "head_created_at", "max_note_id", "max_note_created_at"):
-    v = st.get(k, "")
-    v = "" if v is None else str(v)
-    # a masked sha (__SECRET_N__) stored by an older run is not a cutoff
-    if k == "head_sha" and not re.fullmatch(r"[0-9a-f]{40}", v):
-        v = ""
-    print(v)
+def val(k, default=""):
+    v = st.get(k, default)
+    return "" if v is None else str(v)
+out = [val("head_sha"), val("head_created_at"), val("max_note_id"), val("max_note_created_at"),
+       val("merge_status"), val("detailed_merge_status"),
+       "__absent__" if "blocking_discussions_resolved" not in st
+       else ("null" if st.get("blocking_discussions_resolved") is None
+             else ("true" if st.get("blocking_discussions_resolved") else "false"))]
+# a masked sha (__SECRET_N__) stored by an older run is not a cutoff
+if not re.fullmatch(r"[0-9a-f]{40}", out[0]):
+    out[0] = ""
+appr = st.get("approved_by")
+out.append("__absent__" if appr is None else ",".join(appr))
+print("\n".join(out))
 PY
   mapfile -t sf < "$GT_API_TMP/state.fields"
   c_cut_sha="${sf[0]}"; c_cut_iso="${sf[1]}"; n_cut_id="${sf[2]:-0}"; n_cut_iso="${sf[3]}"
+  old_ms="${sf[4]}"; old_dms="${sf[5]}"; old_blocking="${sf[6]}"; old_approvals="${sf[7]}"
   basis="state marker: head=${c_cut_sha:-<none>}, note>${n_cut_id}"
 elif [ -n "$since" ]; then
   if gt_is_sha "$since"; then
@@ -357,10 +419,11 @@ if [ -s "$res_events" ]; then
   echo
   echo "== thread status changes =="
   gt_get_all "$mr_ep/discussions" > "$GT_API_TMP/disc.jsonlines"
-  python3 - "$res_events" "$GT_API_TMP/disc.jsonlines" <<'PY'
+  python3 - "$res_events" "$GT_API_TMP/disc.jsonlines" "$GT_PREFIX" <<'PY'
 import json, sys
 events = [json.loads(l) for l in open(sys.argv[1]) if l.strip()]
 disc = [json.loads(l) for l in open(sys.argv[2]) if l.strip()]
+prefix = sys.argv[3]  # the configured comment prefix
 note_home = {}
 for d in disc:
     for n in d.get("notes") or []:
@@ -387,7 +450,7 @@ for e in events:  # newest first, same order as the notes section
     ctx = ""
     for n in ns:  # prefer our original note, else the first note of the thread
         body = n.get("body") or ""
-        if body.startswith("AI generated: "):
+        if body.startswith(prefix):
             ctx = body.splitlines()[0] if body.splitlines() else ""
             break
     if not ctx and ns:
@@ -398,11 +461,62 @@ for e in events:  # newest first, same order as the notes section
 PY
 fi
 
+# ---- merge status changes -------------------------------------------------
+# Printed only when the delta changes one of the tracked aspects (one line
+# per aspect). Fields absent from a marker written by an older version
+# (schema 2) count as "not changed" - the category never reports a false
+# change merely because an old marker lacks the field.
+if [ -n "$state_file" ] && [ -f "$state_file" ]; then
+  ms_lines="$GT_API_TMP/ms.lines"
+  python3 - "$old_ms" "$old_dms" "$old_blocking" "$old_approvals" \
+            "$mr_ms" "$mr_dms" "$mr_blocking" "$approvals_usernames" > "$ms_lines" <<'PY'
+import sys
+
+def parse_args():
+    (old_ms, old_dms, old_blocking, old_approvals,
+     ms, dms, blocking, approvals) = sys.argv[1:9]
+    return (old_ms, old_dms, old_blocking, old_approvals,
+            ms, dms, blocking, approvals)
+
+old_ms, old_dms, old_blocking, old_approvals, ms, dms, blocking, approvals = parse_args()
+ABSENT = "__absent__"
+lines = []
+if old_ms and old_ms != ms:
+    lines.append(f"merge_status: {old_ms} -> {ms}")
+if old_dms and old_dms != dms:
+    lines.append(f"detailed_merge_status: {old_dms} -> {dms}")
+if old_blocking != ABSENT and old_blocking != blocking:
+    lines.append(f"blocking_discussions_resolved: {old_blocking} -> {blocking}")
+if old_approvals != ABSENT:
+    old_set = {u for u in old_approvals.split(",") if u}
+    new_set = {u for u in approvals.split(",") if u}
+    added = sorted(new_set - old_set)
+    removed = sorted(old_set - new_set)
+    bits = []
+    if added:
+        bits.append("+" + ", +".join(added))
+    if removed:
+        bits.append("-" + ", -".join(removed))
+    if bits:
+        lines.append("approvals: " + ", ".join(bits))
+if lines:
+    print("\n".join(lines))
+PY
+  if [ -s "$ms_lines" ]; then
+    echo
+    echo "== merge status =="
+    cat "$ms_lines"
+  fi
+fi
+
 # ---- state update ------------------------------------------------------
 if [ -n "$state_file" ]; then
-  python3 - "$state_file" "$proj" "$iid" "$head_sha" "$head_created" "${head_short:-}" "$GT_API_TMP/notes.jsonlines" <<'PY'
+  python3 - "$state_file" "$proj" "$iid" "$head_sha" "$head_created" "${head_short:-}" \
+           "$GT_API_TMP/notes.jsonlines" "$mr_ms" "$mr_dms" "$mr_blocking" \
+           "$approvals_usernames" <<'PY'
 import json, sys, os, datetime
-state_path, proj, iid, head_sha, head_created, head_short, notes_path = sys.argv[1:]
+(state_path, proj, iid, head_sha, head_created, head_short, notes_path,
+ mr_ms, mr_dms, mr_blocking, approvals_arg) = sys.argv[1:12]
 old = {}
 if os.path.exists(state_path):
     try:
@@ -421,8 +535,9 @@ for line in open(notes_path):
 # never store a masked sha: the cutoff walk would search for "__SECRET_N__"
 if not (len(head_sha) == 40 and all(ch in "0123456789abcdef" for ch in head_sha)):
     head_sha = ""
+blocking = None if mr_blocking == "null" else (mr_blocking == "true")
 st = {
-    "schema": 2,
+    "schema": 3,
     "project": proj,
     "iid": iid,
     "head_sha": head_sha,
@@ -430,6 +545,12 @@ st = {
     "head_created_at": head_created,
     "max_note_id": max_id,
     "max_note_created_at": max_ts,
+    # merge-status snapshot + approvals set (usernames only, no secrets);
+    # additive over schema 2 - older markers load unchanged
+    "merge_status": mr_ms,
+    "detailed_merge_status": mr_dms,
+    "blocking_discussions_resolved": blocking,
+    "approved_by": [u for u in approvals_arg.split(",") if u],
     "saved_at": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
 }
 d = os.path.dirname(state_path)

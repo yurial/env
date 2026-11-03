@@ -13,6 +13,12 @@
 #                         (the remaining positionals shift left)
 # GITLAB_TOOLS_STATE_DIR  directory for --state marker files given as a bare
 #                         filename (mr-updates.sh); created on demand
+# GITLAB_COMMENT_PREFIX   prefix every machine-generated comment must start
+#                         with; write scripts refuse bodies without it and the
+#                         --ai-only filters select by it (R12.5). Prescribed
+#                         per host/repository by its owner; unset keeps the
+#                         built-in default of lib.sh:
+# GITLAB_COMMENT_PREFIX="AI generated: "
 
 _gt_tools_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 : "${GITLAB_HOST:=gitlab.corp.mail.ru}"

@@ -1,6 +1,6 @@
 ---
 name: glab
-description: "Use when working with GitLab from the command line via glab (GitLab CLI): listing, viewing, creating, checking out, approving, and merging merge requests (MRs), writing MR descriptions (Russian description, English commit message), reading and posting MR comments (line-anchored comments), batch posting of review comments, line-anchor validation against diff hunks, review comments via draft review (draft notes, publish all at once), discussion replies via GraphQL fallback, thread resolution state, processing incoming review comments as the MR author (individual comment workflow, resolve discipline), filtering MRs by role (reviewer, assignee, author), draft/WIP MRs, managing issues, checking CI/CD pipelines and jobs, and calling the GitLab REST API via `glab api` (fields, bodies, pagination, URL-encoded paths), preferring the bundled gitlab-tools scripts (tools/ next to this skill) as the mechanical path for MR update polling with state markers, thread dumps, single line-anchored comments, batch draft review with safe publish, discussion replies, single-thread resolve, and read-only post-publish verification of posted comments: draft count, max note id, body/anchor verification. Covers glab-specific traps: repository context, scope=all, iid vs id, pagination, flag collisions, HTTP 401/403/404 disambiguation, non-interactive usage. Use ONLY for glab/GitLab CLI operations, not for plain git workflows or other forges."
+description: "Use when working with GitLab from the command line via glab (GitLab CLI): listing, viewing, creating, checking out, approving, and merging merge requests (MRs), writing MR descriptions (Russian description, English commit message), reading and posting MR comments (line-anchored comments), batch posting of review comments, line-anchor validation against diff hunks, review comments via draft review (draft notes, publish all at once), discussion replies via GraphQL fallback, thread resolution state, processing incoming review comments as the MR author (individual comment workflow, resolve discipline), filtering MRs by role (reviewer, assignee, author), draft/WIP MRs, managing issues, checking CI/CD pipelines and jobs, and calling the GitLab REST API via `glab api` (fields, bodies, pagination, URL-encoded paths), preferring the bundled gitlab-tools scripts (tools/ next to this skill) as the mechanical path for MR update polling with state markers (merge status included), the fast boolean has-updates timer check and the timer/watcher gate scenario over it, a live token-health probe, the MR card, the true local MR diff (file/stat/hunk/conflict modes), thread dumps, single line-anchored comments, batch draft review with safe publish, discussion replies, single-thread resolve, and read-only post-publish verification of posted comments: draft count, max note id, body/anchor verification. Covers glab-specific traps: repository context, scope=all, iid vs id, pagination, flag collisions, HTTP 401/403/404 disambiguation, non-interactive usage. Use ONLY for glab/GitLab CLI operations, not for plain git workflows or other forges."
 ---
 
 # glab: GitLab CLI — typical workflows and traps
@@ -52,7 +52,10 @@ from any directory. Before working with a new host, make sure it has a valid
 token (`✓ Logged in ... as <username>`); `x`/`!` lines in the output
 (`x No token provided`, `! Invalid token provided`) are indicators of a token
 problem to check — not a verdict: they can coexist with a working token, so
-the token's health is decided by a live API call (section 15).
+the token's health is decided by a live API call (section 15). The preferred
+mechanical form of that live probe is the bundled `mr-auth-probe.sh`
+(section 22): one GET `user`, exit `0` with exactly `ok <username>` on
+stdout, exit `1` with a stderr diagnostic naming the host and the HTTP code.
 
 - Non-interactive login: `glab auth login --hostname <host> --stdin` reads the
   token from standard input (minimum token scopes: `api`, `write_repository`).
@@ -205,6 +208,18 @@ Rules:
 - The prefix is mandatory for every posted comment, without exceptions for
   short one-line comments; in a multi-line comment the first line still
   begins with `AI generated:`.
+- The marker TEXT is configurable per host/repository: the MR/repository
+  owner may prescribe a different prefix (observed: `[ai] `), set through
+  `GITLAB_COMMENT_PREFIX` (environment > `tools/config.sh` > the built-in
+  default `AI generated: `). The bundled tools check and filter by the
+  configured text; the rule itself does not change — every machine-generated
+  comment carries the configured marker, without exceptions.
+
+```bash
+GITLAB_COMMENT_PREFIX='[ai] ' mr-comment.sh <group/project> <iid> <path> <line> "[ai] <comment text>"
+# the env var sets the prefix for this one command (precedence: environment > config.sh > default - see above)
+```
+
 - Repo context (section 1) applies: `glab mr note` and `glab issue note`
   accept `-R <group/project>`; in `glab api` use the `:fullpath` placeholder
   inside the repository, or the URL-encoded project path (section 12).
@@ -257,8 +272,9 @@ glab api -X POST "projects/:fullpath/merge_requests/<iid>/discussions" --input <
 
 - For a comment on the old side of the diff use `old_path` + `old_line`
   instead of `new_path` + `new_line`.
-- The mandatory `AI generated:` prefix (section 9) applies to line-anchored
-  comments as to every other.
+- The mandatory `AI generated:` prefix (shown with the default prefix; the
+  configured one per section 9) applies to line-anchored comments as to
+  every other.
 
 Batch posting of tens of line-anchored comments in one run follows a fixed
 protocol:
@@ -383,8 +399,9 @@ discussions endpoint (section 17) — mechanized by `mr-verify-posted.sh`
 (section 22), which also reports the pending-draft count and the max note
 id baseline.
 
-- The mandatory `AI generated:` prefix (section 9) applies to every draft
-  note as to every other comment.
+- The mandatory `AI generated:` prefix (shown with the default prefix; the
+  configured one per section 9) applies to every draft note as to every
+  other comment.
 - `diff_refs` freshness (section 10) applies to draft positions the same
   way: if the shas rotate between draft creation and publishing, the
   published notes are marked outdated — expected, not an error.
@@ -476,13 +493,17 @@ per host. Three pitfalls observed in practice:
 Rule: `auth status` output is a hint to check, never a verdict. The health
 of a token is decided only by a live API call — a cheap one suffices:
 `glab api user --hostname <host>` (200 — the token works, ignore the `!`
-line; 401 — the token is broken). Re-login is performed only after a real
+line; 401 — the token is broken). The preferred mechanical form of that
+probe is the bundled `mr-auth-probe.sh <host>` (section 22): the same single
+GET `user` with the verdict on stdout (`ok <username>`) and the host + HTTP
+code in the diagnostic on failure. Re-login is performed only after a real
 401 from a live call (section 14), never on an `!` line alone.
 
-Recovery: first a live probe — `glab api user --hostname <host>`; only on a
-real 401 re-login `glab auth login --hostname <host> --stdin`, or supply a
-fresh token via `GITLAB_TOKEN` (section 2). `glab api` still returns 401 with
-exit code 0 (section 3/13).
+Recovery: first a live probe — `mr-auth-probe.sh <host>` (raw form:
+`glab api user --hostname <host>`); only on a real 401 re-login
+`glab auth login --hostname <host> --stdin`, or supply a fresh token via
+`GITLAB_TOKEN` (section 2). `glab api` still returns 401 with exit code 0
+(section 3/13).
 
 ## 16. Git-over-HTTP(S) auth: tokens do not always work for push (trap)
 
@@ -601,8 +622,9 @@ glab api graphql --input <file>
 #                        "body":"AI generated: <comment text>"}}}
 ```
 
-The mandatory `AI generated:` prefix (section 9) applies to GraphQL replies
-as to every other comment.
+The mandatory `AI generated:` prefix (shown with the default prefix; the
+configured one per section 9) applies to GraphQL replies as to every other
+comment.
 
 Thread state: in the discussions listing a discussion-level `resolved` field
 may be absent (observed on 18.7.7-ee — instance-dependent); a thread counts
@@ -650,7 +672,7 @@ explicitly in non-interactive runs (section 3).
 The skill ships a bash+python3 toolkit in `tools/` next to this SKILL.md.
 The scripts wrap `glab api` and mechanically enforce the protocols and
 traps of sections 5, 10, 11, 17, 18, and 19 — the scope=all rule, local
-anchor validation, the `AI generated:` prefix, verification by follow-up
+anchor validation, the configured comment prefix, verification by follow-up
 GET, the GraphQL reply fallback, pagination. Full contracts (arguments,
 exit codes, guards, stdout sections) are documented in `tools/README.md`;
 the gitlab-tools topic of SPEC.md is normative for this section. Exit codes:
@@ -658,25 +680,29 @@ the gitlab-tools topic of SPEC.md is normative for this section. Exit codes:
 
 One line per script:
 
-- `mr-list.sh [--role reviewer|author|assignee] [--state opened|closed|merged|all] [--draft|--no-draft] [--json] [--project <group/proj>] [--max N]` — global MR list by role for the current user across all accessible projects (default `--role reviewer --state opened`, the "what awaits my review" scenario); the mandatory `scope=all` (section 5) and full pagination are built in; one block per MR (`references.full`, DRAFT mark, title, author, updated_at date, web_url), newest update first; `--json` prints the normalized array; GET-only, an empty result is a success.
-- `mr-updates.sh <project> <iid> [--since <iso8601|sha>] [--state <file>] [--fetch]` — MR state, new commits (diffstat inside a clone), new notes, and thread status changes; with `--state` only the delta since the marker (additive schema, a masked sha is never stored as a cutoff).
-- `mr-has-updates.sh <project> <iid> [--state <file>]` — fast boolean "any updates on this MR?" check for timers (read-only, GET-only, no clone needed): compares commits, notes (system ones included), thread resolve flips and new discussions, MR state/draft, title/description hashes, reviewers/approvals, merge status, and the head-sha CI pipeline against a has-updates marker; exit 0 — updates present (one summary line per category on stdout), 1 — none (the first run records a baseline and prints `baseline recorded (...)`), 2 — usage error, 3 — API failure (the marker is left untouched so the delta is not lost).
-- `mr-threads.sh <project> <iid> [--open|--all] [--ai-only] [--max-chars N] [--full]` — readable thread dump: discussion id, resolved state, anchor, authors, bodies; GET-only.
+- `mr-auth-probe.sh [host]` — live token-health probe (the mechanical form of the section 15 rule): exactly one GET `user` through the shared error-detection machinery; exit 0 prints exactly `ok <username>`, exit 1 reports the host + HTTP code (or network error) on stderr, exit 2 usage. GET-only, no clone, no state, no token values read or echoed.
+- `mr-list.sh [--role reviewer|author|assignee] [--state opened|closed|merged|all] [--draft|--no-draft] [--json] [--project <group/proj>] [--max N] [--repo <dir>]` — global MR list by role for the current user across all accessible projects (default `--role reviewer --state opened`, the "what awaits my review" scenario); the mandatory `scope=all` (section 5) and full pagination are built in; one block per MR (`references.full`, DRAFT mark, title, author, updated_at date, web_url), newest update first; `--json` prints the normalized array; GET-only, an empty result is a success.
+- `mr-updates.sh <project> <iid> [--since <iso8601|sha>] [--state <file>] [--fetch] [--repo <dir>]` — MR state, new commits (diffstat inside a clone), new notes, thread status changes, and a `== merge status ==` section (detailed/legacy status transitions, the `blocking_discussions_resolved` flip, approvals +username/-username diffs) printed only when the delta changes them; with `--state` only the delta since the marker (additive schema, a masked sha is never stored as a cutoff).
+- `mr-has-updates.sh <project> <iid> [--state <file>] [--no-ci] [--repo <dir>]` — fast boolean "any updates on this MR?" check for timers (read-only, GET-only, no clone needed): compares commits, notes (system ones included), thread resolve flips and new discussions, MR state/draft, title/description hashes, reviewers/approvals, merge status (incl. `blocking_discussions_resolved`), and the head-sha CI pipeline against a has-updates marker; `--no-ci` excludes the CI category (no pipelines GET, no CI line, the marker keeps its saved pipeline values — the delta is not lost); exit 0 — updates present (one summary line per category on stdout), 1 — none (the first run records a baseline and prints `baseline recorded (...)`), 2 — usage error, 3 — API failure (the marker is left untouched so the delta is not lost).
+- `mr-card.sh <project> <iid> [--json] [--full] [--repo <dir>]` — the MR card: title + DRAFT mark, state, branches, author/reviewers/approvals, `blocking_discussions_resolved`, merge statuses, the recovered head sha with its provenance, `changes_count`, the truncated description, and the local diffstat `<merge-base>..<head>`; `--json` prints one normalized object; without a clone the card still prints, without the diffstat, with a NOTE on stderr.
+- `mr-diff.sh <project> <iid> [--files|--stat|--hunks|--conflicts] [--repo <dir>]` — the true local MR diff, always `<merge-base>..<head>` (never `diff_refs.start_sha`, never a two-dot against the moved target); `--files`/`--stat`/`--hunks` (the shared hunk-range construction the anchor validators use), `--conflicts` — a write-free local merge simulation: exit 0 clean / 1 conflicts (paths on stdout) / 3 could not be performed; requires a clone; degrades loudly to the local source-branch tip when the clone lacks the MR head.
+- `mr-threads.sh <project> <iid> [--open|--all] [--ai-only] [--no-system] [--max-chars N] [--full] [--repo <dir>]` — readable thread dump: discussion id, resolved state, anchor, authors, bodies; `--no-system` drops CI-bot system notes (system-only threads are not printed); GET-only.
 - `mr-comment.sh <project> <iid> <path> <line> <body-or-@file> [--old-side] [--no-prefix] [--force] [--dry-run] [--repo <dir>]` — one line-anchored comment: sha recovery, local hunk validation (refuses outside hunks with the valid ranges; `--force` posts unpositioned with `path:line` prepended), POST verified by GET.
 - `mr-draft-review.sh <project> <iid> <comments.json> [--publish] [--dry-run] [--no-prefix] [--repo <dir>] [--ignore-stray]` — batch review via draft notes: validation table, stray-draft refusal (pre-existing pending drafts abort the run), drafts verified by GET; `--publish` publishes only this run's drafts one by one, with `bulk_publish` as an explicitly warned fallback; reply items post immediately via `mr-reply.sh`.
-- `mr-reply.sh <project> <iid> <discussion_id> <body-or-@file> [--no-prefix] [--dry-run]` — reply into an existing thread: REST first, verified to sit inside the discussion by GET, GraphQL `createNote` fallback on 404 or the silent orphan, verified again.
-- `mr-resolve.sh <project> <iid> <discussion_id> [--unresolve] [--dry-run]` — resolve/unresolve exactly ONE thread: guards decided by GET (existence, resolvable notes, idempotent state), state verified by GET after the PUT; no batch mode by design.
+- `mr-reply.sh <project> <iid> <discussion_id> <body-or-@file> [--no-prefix] [--dry-run] [--repo <dir>]` — reply into an existing thread: REST first, verified to sit inside the discussion by GET, GraphQL `createNote` fallback on 404 or the silent orphan, verified again.
+- `mr-resolve.sh <project> <iid> <discussion_id> [--unresolve] [--dry-run] [--repo <dir>]` — resolve/unresolve exactly ONE thread: guards decided by GET (existence, resolvable notes, idempotent state), state verified by GET after the PUT; no batch mode by design.
 - `mr-verify-report.sh <project> <iid> <verdicts.json> [--emit <out.json>] [--post] [--yes] [--repo <dir>]` — verdict plan (acknowledge/contest located by a thread hint, `new` anchored items): the full plan is printed before any write; `--emit` writes a batch for `mr-draft-review.sh`; posting requires `--yes`; it never publishes.
-- `mr-verify-posted.sh <project> <iid> [--expect <expected.json>] [--drafts] [--max-note-id] [--ai-only] [--max-chars N] [--full]` — READ-ONLY post-publish verification (use it instead of ad-hoc inline scripts): pending-draft count (`--drafts`), highest note id on the MR (`--max-note-id`, the follow-up baseline), and `--expect` matching of posted bodies (the comments.json schema of `mr-draft-review.sh`; byte-exact FINAL bodies; anchored items also require `new_path`/`new_line` — or `old_path`/`old_line` — equality; reply items require the body inside the given discussion; `@file` bodies; `--ai-only` narrows to `AI generated:` notes); verdicts `ok`/`anchor-mismatch`/`body-mismatch`/`not-found` with discussion id, note id, anchor, and resolved flag; exit 1 when any expected item is not ok, 2 usage error.
+- `mr-verify-posted.sh <project> <iid> [--expect <expected.json>] [--drafts] [--max-note-id] [--ai-only] [--max-chars N] [--full] [--repo <dir>]` — READ-ONLY post-publish verification (use it instead of ad-hoc inline scripts): pending-draft count (`--drafts`), highest note id on the MR (`--max-note-id`, the follow-up baseline), and `--expect` matching of posted bodies (the comments.json schema of `mr-draft-review.sh`; byte-exact FINAL bodies; anchored items also require `new_path`/`new_line` — or `old_path`/`old_line` — equality; reply items require the body inside the given discussion; `@file` bodies; `--ai-only` narrows to notes with the configured comment prefix); verdicts `ok`/`anchor-mismatch`/`body-mismatch`/`not-found` with discussion id, note id, anchor, and resolved flag; exit 1 when any expected item is not ok, 2 usage error.
 
 When to prefer the tools: use them instead of hand-built glab calls for
 exactly these operations — a global role-based MR listing (reviewer/author/
 assignee across all projects), update polling with a state marker, a
-boolean "any updates?" check for timers, thread
-dumps, a single anchored comment, a batch review, a discussion reply, a
-single-thread resolve, and read-only post-publish verification
-(pending-draft count, max note id, expected-body/anchor checks). Raw glab
-stays the path for everything else
+boolean "any updates?" check for timers (and the timer/watcher gate
+scenario below), a live token-health probe, the MR card, the true local MR
+diff (files/stat/hunks/conflicts), thread dumps, a single anchored comment,
+a batch review, a discussion reply, a single-thread resolve, and read-only
+post-publish verification (pending-draft count, max note id,
+expected-body/anchor checks). Raw glab stays the path for everything else
 (MR/issue/CI operations, project-scoped lists, descriptions, merges) and for
 understanding the underlying API semantics: the tools automate the
 protocols above, they do not replace the knowledge behind them.
@@ -685,10 +711,70 @@ Configuration: optional `tools/config.sh` fills site defaults only when the
 environment has not set the variable — precedence
 `environment > config.sh > built-in defaults`: `GITLAB_HOST` (instance host
 of every call), `GITLAB_DEFAULT_PROJECT` (the `<project>` positional may be
-omitted), `GITLAB_REPO` (clone for sha recovery and hunk building; default:
-the clone containing the current directory), `GITLAB_TOOLS_STATE_DIR`
-(default `<tools>/.state`, created on demand). The toolkit is
+omitted), `GITLAB_REPO` (clone for sha recovery, hunk building, the MR card
+diffstat, and the local MR diff; default: the clone containing the current
+directory), `GITLAB_COMMENT_PREFIX` (the configured comment prefix checked
+on every write and used by the `--ai-only` filters; default
+`AI generated: ` — the marker text may be prescribed per host/repository by
+its owner), `GITLAB_TOOLS_STATE_DIR` (default `<tools>/.state`, created on
+demand). Every script accepts the optional `--repo <dir>` flag with
+identical semantics — it overrides `GITLAB_REPO` for the invocation
+(flag > environment > `config.sh` > built-in default), a nonexistent
+directory is a usage error (exit 2), and scripts that make no clone use of
+the value accept it for interface uniformity; the usage text of every
+script taking `--repo` carries the hint
+`clone is configured via GITLAB_REPO env or config.sh`. The toolkit is
 location-independent — it resolves its library, config, and state directory
 relative to its own location. Anchored writes need a git clone of the
 project (masked shas and collapsed `/diffs` are worked around locally);
-without one, `mr-comment.sh` degrades to an unpositioned post and says so.
+without one, `mr-comment.sh` degrades to an unpositioned post and says so;
+`mr-diff.sh` requires a clone outright.
+
+Timer/watcher recipe (the has-updates gate). To watch an MR on a schedule,
+make `mr-has-updates.sh` the gate command of any scheduler that fires when
+its gate command exits `0`:
+
+```bash
+# the watcher owns its marker file and pins the clone for the woken agent
+# (the gate command itself is clone-free and GET-only)
+GITLAB_REPO=<clone-dir> mr-has-updates.sh <group/project> <iid> \
+  --state <marker-file> [--no-ci]
+# exit 0: updates present - the fire happens; the stdout summary lines are
+#         the wakeup message payload
+# exit 1: no updates - the fire is skipped (the first tick records the
+#         baseline, prints "baseline recorded (...)", and exits 1 - the
+#         arming step, not an error)
+# exit 3: API/network failure - the fire is skipped WITHOUT an alert; the
+#         marker is untouched, so the delta is never lost; retry next tick
+```
+
+Full lifecycle: the first tick arms the watcher (baseline recorded, exit 1,
+no fire); every later tick fires only on a real delta, and the summary
+lines (commits, notes, threads, MR state, title/description,
+reviewers/approvals, merge status, CI) are attached to the wakeup so the
+woken agent knows what changed. Set `GITLAB_REPO` in the gate command to
+the clone the woken agent will use for diff/anchor work. A watcher that
+does not care about CI events passes `--no-ci`: the CI pipeline is not
+requested, no CI line appears, and the marker keeps its saved pipeline
+values so a CI change during the window is caught by the next full check.
+
+End-to-end walkthrough: reviewing an MR with the toolkit — the typical
+reviewer loop as one sequence (contracts live in `tools/README.md` and the
+sections referenced below; the bodies of all posted comments carry the
+configured prefix, section 9):
+
+```bash
+mr-auth-probe.sh <host>                                     # 1. token health: ok <username> or a host+code diagnostic
+mr-card.sh <group/project> <iid> --repo <clone-dir>         # 2. the MR card: state, approvals, merge statuses, head, diffstat
+mr-diff.sh <group/project> <iid> --files --repo <clone-dir> # 3. survey the change (likewise --stat / the default full diff)
+mr-threads.sh <group/project> <iid> --all --no-system       # 4. read the review threads without the CI-bot noise
+mr-draft-review.sh <group/project> <iid> <comments.json> --repo <clone-dir> \
+                                                            # 5. create the drafts + verify by GET (private; rerun with
+                                                            #    --publish to publish ONLY this run's drafts, one by one)
+mr-verify-posted.sh <group/project> <iid> --expect <expected.json> --drafts --max-note-id \
+                                                            # 6. read-only verification of what actually landed
+mr-reply.sh <group/project> <iid> <discussion_id> "<comment text>" && \
+  mr-resolve.sh <group/project> <iid> <discussion_id>       # 7. answer the author's pushback, resolve only after it
+mr-has-updates.sh <group/project> <iid> --state <marker-file> [--no-ci] \
+                                                            # 8. poll for the author's next push (the watcher gate above)
+```

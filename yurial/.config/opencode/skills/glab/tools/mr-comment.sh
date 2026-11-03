@@ -35,15 +35,19 @@ usage: mr-comment.sh <project> <mr_iid> <path> <line> <body-or-@file>
 
 options:
   --old-side    anchor on the old (removed) line
-  --no-prefix   skip the mandatory "AI generated: " prefix check
+  --no-prefix   skip the mandatory comment-prefix check
+                (GITLAB_COMMENT_PREFIX, default "AI generated: ")
   --force       if the anchor is invalid, post unpositioned with the body
                 prefixed by "path:line" instead of refusing
   --dry-run     print the exact payload (incl. position) and do not POST
   --repo DIR    clone used for sha recovery / hunk building
-                (default: GITLAB_REPO or the clone containing $PWD)
+                (default: GITLAB_REPO or the clone containing $PWD;
+                clone is configured via GITLAB_REPO env or config.sh)
 EOF
   exit 2
 }
+
+die_usage() { printf 'ERROR: %s\n' "$*" >&2; usage; }
 
 proj="" iid="" path="" line="" bodyarg="" repo_arg=""
 old_side=0 no_prefix=0 force=0 dry=0
@@ -73,6 +77,10 @@ if [ -n "$line" ] && [ -z "$bodyarg" ] && [ -n "$proj" ] && [ -n "$iid" ] && [ -
 fi
 [ -n "$proj" ] && [ -n "$iid" ] && [ -n "$path" ] && [ -n "$line" ] && [ -n "$bodyarg" ] || usage
 [[ "$line" =~ ^[0-9]+$ ]] || gt_die "<line> must be a positive integer, got: $line"
+# --repo semantics are identical in every script that accepts the flag
+# (R12.4): precedence flag > GITLAB_REPO env > config.sh > clone containing
+# $PWD, and a nonexistent directory is a usage error
+gt_repo_arg_ok "$repo_arg" || die_usage "--repo: no such directory: $repo_arg"
 side="new"; if [ "$old_side" = 1 ]; then side="old"; fi
 
 body_file="$GT_API_TMP/body.txt"

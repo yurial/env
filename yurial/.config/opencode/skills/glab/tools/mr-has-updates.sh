@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # mr-has-updates.sh - fast boolean "does this MR have any updates?" check.
 #
-# usage: mr-has-updates.sh <project> <mr_iid> [--state <file>]
+# usage: mr-has-updates.sh <project> <mr_iid> [--state <file>] [--no-ci]
+#                          [--repo <dir>]
 #
 #   <project>    group/project path (omit when GITLAB_DEFAULT_PROJECT is set)
 #   <mr_iid>     MR iid within the project
@@ -9,6 +10,22 @@
 #                <tools>/.state/has-updates/<project w/o slashes>__<iid>.json
 #                (a bare filename resolves under GITLAB_TOOLS_STATE_DIR/has-updates;
 #                the directory is created on demand)
+#   --no-ci      exclude the CI category entirely: the CI pipeline for the
+#                current head is not requested (the sha-filter pipelines GET
+#                and its ref-pipeline fallback are both skipped; one GET
+#                saved from the ~six API budget), not compared against the
+#                marker, and no CI line appears in the stdout summary. The
+#                marker structure does not change: the stored pipeline
+#                fields are not refreshed and keep their last saved values
+#                (a first-run baseline under --no-ci stores no pipeline
+#                fields). A CI change that happened during a --no-ci window
+#                is detected by the next run without --no-ci, so the CI
+#                delta is not lost. Every other category works unchanged;
+#                exit codes and the first-run baseline semantics are
+#                unaffected.
+#   --repo DIR   accepted for interface uniformity (this script is
+#                clone-free; clone is configured via GITLAB_REPO env or
+#                config.sh)
 #
 # Exit codes:
 #   0  updates present; stdout carries one human-readable line per changed
@@ -23,8 +40,11 @@
 #
 # Read-only: GET-only, nothing is ever posted; no git clone needed. The
 # marker stores no secrets: no full 40-hex shas (short ids only), no MR or
-# description text (length + sha256 prefix only). Written atomically
-# (tmp + rename). Schema is additive ("schema": 3).
+# description text (length + sha256 prefix only), no secrets in the
+# approvals set (usernames only). Written atomically (tmp + rename). Schema
+# is additive ("schema": 4; older schema-3 markers load unchanged - a field
+# absent from an older marker counts as "not changed" on the first read
+# after the upgrade).
 #
 # Traps handled (see lib.sh / tools/README.md): glab api rc=0 on HTTP errors
 # (failures detected from the stderr HTTP line and error-shaped bodies; a
@@ -41,17 +61,24 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 usage() {
   cat >&2 <<'EOF'
-usage: mr-has-updates.sh <project> <mr_iid> [--state <file>]
+usage: mr-has-updates.sh <project> <mr_iid> [--state <file>] [--no-ci] [--repo <dir>]
+
+  --no-ci     exclude the CI category (no pipelines GET, no CI comparison
+              line); every other category works unchanged
+  --repo DIR  accepted for interface uniformity (the script is clone-free;
+              clone is configured via GITLAB_REPO env or config.sh)
 EOF
   exit 2
 }
 
 die_usage() { printf 'ERROR: %s\n' "$*" >&2; usage; }
 
-proj="" iid="" state_file=""
+proj="" iid="" state_file="" repo_arg="" no_ci=0
 while [ $# -gt 0 ]; do
   case "$1" in
     --state) [ $# -ge 2 ] || die_usage "--state needs a file path"; state_file="$2"; shift ;;
+    --no-ci) no_ci=1 ;;
+    --repo) [ $# -ge 2 ] || die_usage "--repo needs a directory"; repo_arg="$2"; shift ;;
     -h|--help) usage ;;
     -*) die_usage "unknown option: $1" ;;
     *) if [ -z "$proj" ]; then proj="$1"
@@ -67,6 +94,9 @@ if [ -n "$proj" ] && [ -z "$iid" ] && [ -n "$GITLAB_DEFAULT_PROJECT" ]; then
 fi
 [ -n "$proj" ] && [ -n "$iid" ] || usage
 [[ "$iid" =~ ^[0-9]+$ ]] || die_usage "<mr_iid> must be numeric, got: $iid"
+# --repo is validated everywhere it is accepted, even though this script
+# makes no clone use of the value (R12.4)
+gt_repo_arg_ok "$repo_arg" || die_usage "--repo: no such directory: $repo_arg"
 
 state_dir="$GITLAB_TOOLS_STATE_DIR/has-updates"
 if [ -n "$state_file" ]; then
@@ -124,9 +154,13 @@ ghu_get "$mr_ep/approvals" "$GT_API_TMP/appr.jsonl"
 # CI: the contract query is pipelines?sha=<head_sha>; the sha filter needs
 # the FULL 40-hex id (a short id returns an empty list on this instance).
 # When the commits endpoint masks the id, fall back to the MR head ref and
-# take the newest pipeline of that ref.
+# take the newest pipeline of that ref. --no-ci skips the CI category
+# entirely: both GETs are skipped (one GET saved) and the marker keeps its
+# last saved pipeline values (a first-run baseline stores none).
 pipe_basis="sha"
-pipe_sha="$(python3 -c '
+pipe_sha=""
+if [ "$no_ci" != 1 ]; then
+  pipe_sha="$(python3 -c '
 import json, sys
 try:
     c = json.loads(open(sys.argv[1]).readline())
@@ -135,8 +169,11 @@ except Exception:
     cid = ""
 print(cid if len(cid) == 40 else "")
 ' "$GT_API_TMP/commits.jsonl")"
+fi
 if [ -n "$pipe_sha" ]; then
   ghu_get "projects/$enc/pipelines?sha=$pipe_sha" "$GT_API_TMP/pipe.jsonl"
+elif [ "$no_ci" = 1 ]; then
+  : > "$GT_API_TMP/pipe.jsonl"
 else
   pipe_basis="ref"
   gt_note "commits endpoint masked the head id; CI status via the MR head ref"
@@ -151,11 +188,13 @@ fi
 rc=0
 python3 - "$GT_API_TMP/mr.jsonl" "$GT_API_TMP/commits.jsonl" "$GT_API_TMP/notes.jsonl" \
           "$GT_API_TMP/disc.jsonl" "$GT_API_TMP/appr.jsonl" "$GT_API_TMP/pipe.jsonl" \
-          "$state_file" "$proj" "$iid" "$pipe_basis" <<'PY' || rc=$?
+          "$state_file" "$proj" "$iid" "$pipe_basis" "$no_ci" <<'PY' || rc=$?
 import hashlib, json, os, sys, datetime
 
 (mr_path, commits_path, notes_path, disc_path, appr_path, pipe_path,
- state_path, proj, iid, pipe_basis) = sys.argv[1:11]
+ state_path, proj, iid, pipe_basis, no_ci) = sys.argv[1:12]
+
+no_ci = no_ci == "1"
 
 RESOLVE_ACTIONS = {"[resolved]", "[unresolved]", "resolved all threads"}
 MAX_COMMITS_LISTED = 5  # new-commit shas printed in the summary line
@@ -210,6 +249,7 @@ cur["approved_by"] = sorted(
 ) if approvals and isinstance(approvals[0], dict) else []
 cur["merge_status"] = mr.get("merge_status") or ""
 cur["detailed_merge_status"] = mr.get("detailed_merge_status") or ""
+cur["blocking"] = mr.get("blocking_discussions_resolved")
 
 head = commits[0] if commits else {}
 cur["head_short"] = head.get("short_id") or eff_sha(head)
@@ -239,20 +279,20 @@ if os.path.exists(state_path):
     except Exception as exc:
         die_api(f"state marker {state_path} is unreadable ({exc}); "
                 f"fix or remove it by hand - refusing to lose the delta")
-    if isinstance(loaded, dict) and loaded.get("schema") == 3 \
+    if isinstance(loaded, dict) and loaded.get("schema") in (3, 4) \
             and str(loaded.get("iid")) == str(iid) \
             and loaded.get("project") == proj:
         old = loaded
     else:
-        print(f"NOTE: {state_path} is not a schema-3 marker for {proj}!{iid}; "
+        print(f"NOTE: {state_path} is not a schema-3/4 marker for {proj}!{iid}; "
               f"recording a fresh baseline", file=sys.stderr)
 
 now = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def build_state():
-    return {
-        "schema": 3,
+    st = {
+        "schema": 4,
         "project": proj,
         "iid": int(iid),
         "head_short_id": cur["head_short"],
@@ -271,9 +311,18 @@ def build_state():
         "approved_by": cur["approved_by"],
         "merge_status": cur["merge_status"],
         "detailed_merge_status": cur["detailed_merge_status"],
-        "pipeline": cur["pipeline"],
+        "blocking_discussions_resolved": cur["blocking"],
         "saved_at": now,
     }
+    if no_ci:
+        # --no-ci never refreshes the pipeline fields: they keep their last
+        # saved values; a first-run baseline (old is None) stores none - the
+        # additive absent-field semantics of R13.14
+        if isinstance(old, dict) and "pipeline" in old:
+            st["pipeline"] = old.get("pipeline")
+    else:
+        st["pipeline"] = cur["pipeline"]
+    return st
 
 
 def write_state(st):
@@ -288,8 +337,11 @@ def write_state(st):
 
 if old is None:
     write_state(build_state())
-    pipe = cur["pipeline"]
-    pipe_txt = "no pipeline" if pipe is None else f"pipeline {pipe['id']} {pipe['status']}"
+    if no_ci:
+        pipe_txt = "pipeline not checked (--no-ci)"
+    else:
+        pipe = cur["pipeline"]
+        pipe_txt = "no pipeline" if pipe is None else f"pipeline {pipe['id']} {pipe['status']}"
     print(f"baseline recorded (head {cur['head_short'] or '?'}, "
           f"{len(commits)} commit(s) listed, max note id {cur['max_note_id']}, "
           f"{len(notes)} note(s), {len(discussions)} discussion(s) listed, "
@@ -407,31 +459,41 @@ set_diff(old.get("approved_by"), cur["approved_by"], "approvals", ra_parts)
 if ra_parts:
     add("reviewers/approvals: " + "; ".join(ra_parts))
 
-# 7. merge status
+# 7. merge status (blocking_discussions_resolved joined the category in
+#    schema 4; a marker written by an older version lacks the field - an
+#    absent field counts as "not changed", never a false change)
 ms_parts = []
 if cur["merge_status"] != old.get("merge_status"):
     ms_parts.append(f"{old.get('merge_status')} -> {cur['merge_status']}")
 if cur["detailed_merge_status"] != old.get("detailed_merge_status"):
     ms_parts.append(f"detailed: {old.get('detailed_merge_status')} -> "
                     f"{cur['detailed_merge_status']}")
+if "blocking_discussions_resolved" in old \
+        and cur["blocking"] != old.get("blocking_discussions_resolved"):
+    fmt = lambda v: "true" if v else ("false" if v is not None else "null")
+    ms_parts.append(f"blocking_discussions_resolved: "
+                    f"{fmt(old.get('blocking_discussions_resolved'))} -> {fmt(cur['blocking'])}")
 if ms_parts:
     add("merge status: " + "; ".join(ms_parts))
 
-# 8. CI pipeline for the current head
-old_pipe = old.get("pipeline") or None
-if cur["pipeline"] != old_pipe:
-    if cur["pipeline"] is None:
-        add(f"CI: pipeline gone (was "
-            f"{old_pipe['id']} {old_pipe['status'] if old_pipe else '?'})")
-    elif old_pipe is None:
-        p = cur["pipeline"]
-        add(f"CI: new pipeline {p['id']} {p['status']} (head {cur['head_short']}, "
-            f"by {pipe_basis})")
-    else:
-        p = cur["pipeline"]
-        same = "same id" if p["id"] == old_pipe.get("id") else f"id {old_pipe.get('id')} -> {p['id']}"
-        add(f"CI: pipeline {p['id']} {old_pipe.get('status')} -> {p['status']} "
-            f"({same}, head {cur['head_short']})")
+# 8. CI pipeline for the current head (--no-ci excludes the category: no
+#    comparison against the stale saved value, no CI summary line - the
+#    delta surfaces on the next run without --no-ci)
+if not no_ci:
+    old_pipe = old.get("pipeline") or None
+    if cur["pipeline"] != old_pipe:
+        if cur["pipeline"] is None:
+            add(f"CI: pipeline gone (was "
+                f"{old_pipe['id']} {old_pipe['status'] if old_pipe else '?'})")
+        elif old_pipe is None:
+            p = cur["pipeline"]
+            add(f"CI: new pipeline {p['id']} {p['status']} (head {cur['head_short']}, "
+                f"by {pipe_basis})")
+        else:
+            p = cur["pipeline"]
+            same = "same id" if p["id"] == old_pipe.get("id") else f"id {old_pipe.get('id')} -> {p['id']}"
+            add(f"CI: pipeline {p['id']} {old_pipe.get('status')} -> {p['status']} "
+                f"({same}, head {cur['head_short']})")
 
 # ---- verdict ---------------------------------------------------------------
 

@@ -3,7 +3,7 @@
 #
 # usage: mr-verify-posted.sh <project> <mr_iid> [--expect <expected.json>]
 #                            [--drafts] [--max-note-id] [--ai-only]
-#                            [--max-chars N] [--full]
+#                            [--max-chars N] [--full] [--repo <dir>]
 #
 # GET-only: no POST/PUT/DELETE is ever sent (write tools verify their own
 # writes; this script re-checks afterwards, e.g. after a mr-draft-review.sh
@@ -29,7 +29,7 @@
 #                   A body string starting with "@" names a file whose exact
 #                   bytes are the body (same @file convention as
 #                   mr-comment.sh / mr-reply.sh; "@-" stdin is not supported
-#                   here). No "AI generated: " prefix is forced: expected
+#                   here). No comment prefix is forced: expected
 #                   bodies are the FINAL posted bodies, compared
 #                   byte-exactly as given - an out-of-hunk batch item posts
 #                   unpositioned with "path:line" prepended after the
@@ -66,23 +66,26 @@ usage() {
   cat >&2 <<'EOF'
 usage: mr-verify-posted.sh <project> <mr_iid> [--expect <expected.json>]
                            [--drafts] [--max-note-id] [--ai-only]
-                           [--max-chars N] [--full]
+                           [--max-chars N] [--full] [--repo <dir>]
 
   --expect FILE   verify posted comments against expected.json (schema of
                   mr-draft-review.sh comments.json; bodies may be "@file")
   --drafts        print the pending draft_notes count (+ ids) of your user
   --max-note-id   print the highest note id on the MR
-  --ai-only       --expect matches only "AI generated: " notes;
-                  --max-note-id considers only "AI generated: " notes
+  --ai-only       --expect matches only notes with the configured prefix
+                  (GITLAB_COMMENT_PREFIX, default "AI generated: ");
+                  --max-note-id considers only those notes as well
   --max-chars N   truncate body previews to N chars (default 400)
   --full          never truncate previews
+  --repo DIR      accepted for interface uniformity (no clone needed;
+                  clone is configured via GITLAB_REPO env or config.sh)
 
 Exit code 1 when any --expect item is not ok; GET-only, never writes.
 EOF
   exit 2
 }
 
-proj="" iid="" input=""
+proj="" iid="" input="" repo_arg=""
 drafts=0 max_note_id=0 ai_only=0 max_chars=400
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -92,6 +95,7 @@ while [ $# -gt 0 ]; do
     --ai-only) ai_only=1 ;;
     --max-chars) [ $# -ge 2 ] || usage; max_chars="$2"; shift; [[ "$max_chars" =~ ^[0-9]+$ ]] || gt_die "--max-chars expects a number" ;;
     --full) max_chars=-1 ;;
+    --repo) [ $# -ge 2 ] || usage; repo_arg="$2"; shift ;;
     -h|--help) usage ;;
     -*) gt_die "unknown option: $1" ;;
     *) if [ -z "$proj" ]; then proj="$1"
@@ -101,6 +105,10 @@ while [ $# -gt 0 ]; do
   esac
   shift
 done
+# --repo is validated everywhere it is accepted, even though this script
+# makes no clone use of the value (R12.4); a nonexistent directory is a
+# usage error even here, where unknown options die with 1 (R13.9)
+gt_repo_arg_ok "$repo_arg" || { printf 'ERROR: --repo: no such directory: %s\n' "$repo_arg" >&2; usage; }
 # <project> may be omitted when GITLAB_DEFAULT_PROJECT is configured
 if [ -n "$proj" ] && [ -z "$iid" ] && [ -n "$GITLAB_DEFAULT_PROJECT" ]; then
   iid="$proj"; proj="$GITLAB_DEFAULT_PROJECT"

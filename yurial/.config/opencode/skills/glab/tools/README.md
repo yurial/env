@@ -22,15 +22,27 @@ Every assignment only fills an unset/empty variable, so the precedence is:
 | variable                 | default                   | meaning                                            |
 |--------------------------|---------------------------|----------------------------------------------------|
 | `GITLAB_HOST`            | `gitlab.corp.mail.ru`     | instance host for every API call                   |
-| `GITLAB_DEFAULT_PROJECT` | (empty)                   | `<project>` positional may be omitted when set; the remaining positionals shift left (mr-updates/mr-threads/mr-verify-posted: 1 arg, mr-draft-review/mr-resolve/mr-verify-report: 2 args, mr-reply: 3 args, mr-comment: 4 args) |
-| `GITLAB_REPO`            | (cwd)                     | git clone used for sha recovery / hunks            |
+| `GITLAB_DEFAULT_PROJECT` | (empty)                   | `<project>` positional may be omitted when set; the remaining positionals shift left (mr-card/mr-diff/mr-updates/mr-threads/mr-verify-posted: 1 arg, mr-draft-review/mr-resolve/mr-verify-report: 2 args, mr-reply: 3 args, mr-comment: 4 args) |
+| `GITLAB_REPO`            | (cwd)                     | git clone used for sha recovery / hunks / diffstat / the local MR diff |
+| `GITLAB_COMMENT_PREFIX`  | `AI generated: `          | prefix every machine-generated comment must start with: write scripts refuse bodies without it, `--no-prefix` is the only opt-out, and the `--ai-only` filters select by it; prescribed per host/repository by its owner |
 | `GITLAB_TOOLS_STATE_DIR` | `<tools>/.state` (next to `lib.sh`) | directory for `--state` marker files given as a bare filename (mr-updates.sh; mr-has-updates.sh resolves bare names under its `has-updates/` subdir) |
 | `GITLAB_TOKEN`           | glab config               | auth token, honored by glab itself                 |
+
+Every script also accepts the optional `--repo <dir>` flag with identical
+semantics: it overrides `GITLAB_REPO` for the invocation (precedence flag >
+environment > `config.sh` > built-in default), a nonexistent directory is a
+usage error (exit 2), and scripts that make no clone use of the value
+accept it for interface uniformity (validated the same way). The usage text
+printed on a usage error by every script accepting `--repo` carries the
+hint `clone is configured via GITLAB_REPO env or config.sh`.
 
 All output is plain text, no ANSI colors (`NO_COLOR` needs no handling).
 Exit codes: 0 success, 1 failure, 2 usage error — except `mr-has-updates.sh`,
 whose boolean contract redefines the pair: 0 updates present, 1 no updates
-(and the baseline first run), plus 3 for an API/network failure.
+(and the baseline first run), plus 3 for an API/network failure; and except
+the `--conflicts` mode of `mr-diff.sh`, which owns its 0/1 pair as the
+verdict (0 clean, 1 conflicts) and exits 3 when the check could not be
+performed at all.
 
 ## Instance traps these scripts encode
 
@@ -82,22 +94,54 @@ whose boolean contract redefines the pair: 0 updates present, 1 no updates
    `mr-reply.sh`), and GraphQL results are re-verified through REST as well.
    The read-only after-the-fact re-check of what actually landed is
    `mr-verify-posted.sh`.
-8. **Every posted comment must start with the prefix `AI generated: `.**
-   All write scripts refuse to post otherwise, unless `--no-prefix` is
-   passed.
+8. **Every posted comment must start with the configured prefix**
+   (`GITLAB_COMMENT_PREFIX`, default `AI generated: `; environment >
+   `config.sh` > built-in default). All write scripts refuse to post
+   otherwise, unless `--no-prefix` is passed; the `--ai-only` filters of
+   `mr-verify-posted.sh` and `mr-threads.sh` select notes by the same
+   configured text.
 
 ## lib.sh
 
 Shared helpers sourced by every script (the single shared library file):
-config loading, API wrapper + error detection, concatenated-JSON parsing,
-pagination, sha recovery, hunk range building/summarization, GraphQL call
-helper, prefix check, `@file` body loading.
+config loading (including `GITLAB_COMMENT_PREFIX` and the `--repo`
+validation/resolution helpers `gt_repo_arg_ok`/`gt_repo_pick`), API wrapper
++ error detection, concatenated-JSON parsing, pagination, sha recovery,
+hunk range building/summarization (the single hunk construction shared by
+the anchor validators and `mr-diff.sh --hunks`), GraphQL call helper,
+prefix check (against the configured prefix), `@file` body loading.
+
+## mr-auth-probe.sh
+
+```
+mr-auth-probe.sh [host]
+```
+
+Live token-health probe — the mechanical form of the live-probe rule
+(`glab auth status` output is a hint, never a verdict; only a live call
+decides). Performs exactly ONE API call — GET `user` — through the gt_api
+machinery of lib.sh, so the `glab api` rc=0-on-HTTP-error trap is
+neutralized centrally.
+
+- the optional `[host]` positional selects the target host for this
+  invocation; when omitted, the host resolves per the shared runtime
+  contract (environment > `config.sh` > built-in default);
+- exit `0` — the call answered 200 and stdout carries exactly
+  `ok <username>`;
+- exit `1` — the probe failed (an HTTP error, 401 first of all, or a
+  network failure); a stderr diagnostic line names the host and the HTTP
+  code (or the network error);
+- exit `2` — usage error.
+
+GET-only: no writes, no clone, no state files; token values are never
+read, echoed, or stored.
 
 ## mr-list.sh
 
 ```
 mr-list.sh [--role reviewer|author|assignee] [--state opened|closed|merged|all]
            [--draft|--no-draft] [--json] [--project <group/proj>] [--max N]
+           [--repo <dir>]
 ```
 
 Global MR listing by role — the "which MRs await my review" scenario (the
@@ -134,22 +178,67 @@ mr-list.sh --role author --json       # my own MRs as a JSON array
 mr-list.sh --state all --project ai/streamflow/flowruntime --max 20
 ```
 
+## mr-card.sh
+
+```
+mr-card.sh <project> <mr_iid> [--json] [--full] [--repo <dir>]
+```
+
+The MR card — the mechanical "view one MR" step of the watcher loop (raw
+`glab mr view` remains the interactive project-scoped path). Fields, from
+the single-MR endpoint plus the approvals endpoint: title with a `[DRAFT]`
+mark, state, `work_in_progress`, author, reviewers, `approved_by`
+(usernames, the approvals endpoint), `blocking_discussions_resolved`,
+`detailed_merge_status` and the legacy `merge_status`, source and target
+branches, the recovered head sha with its provenance (the masked-sha
+ladder: commits-endpoint id -> `short_id` resolved locally -> git
+ls-remote -> local refs), `changes_count`, and the description truncated to
+400 chars (`--full` prints it whole, the truncation convention of
+`mr-threads.sh`). Plus the local diffstat of `<merge-base>..<head>`.
+
+- text output: one labeled block modeled on the mr-list.sh block style;
+- `--json`: one normalized JSON object with the same fields — `diffstat` as
+  an object of `files`/`insertions`/`deletions`, the description under the
+  same truncation flags; the no-clone NOTE goes to stderr so stdout stays
+  parseable;
+- without a clone the card is still printed, without the diffstat, with an
+  explicit NOTE saying so (the degrade-and-say-so pattern); a stale clone
+  (no MR head) degrades the diffstat to the local source-branch tip with a
+  loud warning.
+
+GET-only plus read-only clone use — nothing is fetched or written. Exit
+codes per the shared contract; a missing project/MR exits 1 with the HTTP
+diagnostics on stderr.
+
+Example:
+
+```
+mr-card.sh ai/streamflow/flowruntime 2108 --repo ~/streamflow/flowruntime
+```
+
 ## mr-updates.sh
 
 ```
 mr-updates.sh <project> <mr_iid> [--since <iso8601|sha>] [--state <file>] [--fetch]
+              [--repo <dir>]
 ```
 
 Prints MR state (head sha, updated_at, draft, state), new commits, all notes
-newer than the marker, and thread status changes. `--since` accepts an
+newer than the marker, thread status changes, and — only when the delta
+changes them — a `== merge status ==` section. `--since` accepts an
 ISO8601 timestamp or a commit sha (walk stops right before it). With
-`--state <file>` the head sha (+ its short_id) plus max note id/created_at
-are stored after printing; the next run reports only the delta (no marker
-file = full dump). A bare `--state` filename resolves under
-`GITLAB_TOOLS_STATE_DIR`. The marker schema is additive (`"schema": 2`);
-older markers load unchanged, and a masked sha (`__SECRET_N__`) in a marker
-is ignored for the cutoff (the timestamp cutoff takes over). Commits come
-from `git log origin/<source_branch> --not origin/<target>` when run inside
+`--state <file>` the head sha (+ its short_id), the max note id/created_at,
+plus the merge-status snapshot (merge_status, detailed_merge_status,
+blocking_discussions_resolved) and the approvals set (usernames only, no
+secrets) are stored after printing; the next run reports only the delta (no
+marker file = full dump). The marker schema is additive (`"schema": 3`):
+older markers (schema 2) load unchanged, a field absent from an older
+marker counts as "not changed" — the merge-status category never reports a
+false change merely because an old marker lacks the field — and a masked
+sha (`__SECRET_N__`) in a marker is ignored for the cutoff (the timestamp
+cutoff takes over). A bare `--state` filename resolves under
+`GITLAB_TOOLS_STATE_DIR`. Commits come from
+`git log origin/<source_branch> --not origin/<target>` when run inside
 a clone (branch must exist locally; `--fetch` refreshes it), otherwise from
 the API commits endpoint; inside a clone every new commit line carries a
 diffstat suffix `(<n> files, +a/-b)` (merge/root commits without numstat get
@@ -159,10 +248,19 @@ When the delta contains resolution events, a `== thread status changes ==`
 section is printed (nothing when there are none). It lists system notes
 `[resolved]` / `[unresolved]` and `resolved all threads` with the discussion
 id (mapped by note id via a lazy discussions GET), the anchor path of the
-thread, who flipped the state, and the first line of our original
-`AI generated: ` note (or the thread's first note) for context. An
+thread, who flipped the state, and the first line of our original prefixed
+note (or the thread's first note) for context. An
 MR-timeline `resolved all threads` note that is not attached to any
 discussion is reported as `(all threads; MR timeline note)`.
+
+When the delta changes the merge-status aspects, a `== merge status ==`
+section is printed — one line per changed aspect:
+
+- `merge_status: <old> -> <new>` and
+  `detailed_merge_status: <old> -> <new>` transitions;
+- `blocking_discussions_resolved: <old> -> <new>` flips;
+- `approvals: +<username>, -<username>` diffs (the approvals endpoint,
+  usernames only).
 
 Example:
 
@@ -173,14 +271,14 @@ mr-updates.sh ai/streamflow/flowruntime 1887 --state mr1887.json
 ## mr-has-updates.sh
 
 ```
-mr-has-updates.sh <project> <mr_iid> [--state <file>]
+mr-has-updates.sh <project> <mr_iid> [--state <file>] [--no-ci] [--repo <dir>]
 ```
 
 Fast boolean "does this MR have any updates?" check — the tool for timers
-(wake the agent only when something changed). Read-only: GET-only, nothing
-is posted, no git clone needed. Compares the current MR snapshot against
-the has-updates marker and reports the categories that moved, one line per
-category:
+(wake the agent only when something changed; see the timer/watcher recipe
+in SKILL.md section 22). Read-only: GET-only, nothing is posted, no git
+clone needed. Compares the current MR snapshot against the has-updates
+marker and reports the categories that moved, one line per category:
 
 - `commits` — a new head (the commit walk stops at the marker head; only
   short ids are ever stored — masked 40-hex shas never enter the marker);
@@ -192,8 +290,9 @@ category:
 - `title/description` — hashes only (length + sha256 prefix; no text is
   stored);
 - `reviewers/approvals` — username set diffs (`approved_by` via the
-  approvals endpoint);
-- `merge status` — `merge_status` / `detailed_merge_status`;
+  approvals endpoint, usernames only);
+- `merge status` — `merge_status` / `detailed_merge_status` and
+  `blocking_discussions_resolved` flips;
 - `CI` — the newest pipeline for the current head sha
   (`pipelines?sha=<head>`; the sha filter needs the FULL 40-hex id — a
   short id returns an empty list on this instance — and when the commits
@@ -212,14 +311,26 @@ filename resolves under `GITLAB_TOOLS_STATE_DIR/has-updates/`; the
 directory is created on demand). The first run writes a baseline, prints
 `baseline recorded (...)`, and exits 1; a rerun with no changes exits 1
 with empty stdout (a single quiet stderr line names the last-check time).
-The marker schema is additive (`"schema": 3`), holds no secrets (no full
-shas, no MR text — short ids and length+hash pairs only), and is written
-atomically (tmp + rename); an unchanged run never touches it. API budget:
-~6 GETs (MR, commits, notes, discussions, approvals, pipelines); only the
-notes listing is paginated through (max-note-id exactness), the rest use
-`per_page=100` pages (discussions newest-first — new-thread detection
-needs the fresh tail, resolve flips of old threads come from system
-notes).
+The marker schema is additive (`"schema": 4`; older schema-3 markers load
+unchanged — a field absent from an older marker counts as "not changed"),
+holds no secrets (no full shas, no MR text — short ids, length+hash pairs,
+and usernames only), and is written atomically (tmp + rename); an unchanged
+run never touches it. API budget: ~6 GETs (MR, commits, notes, discussions,
+approvals, pipelines); only the notes listing is paginated through
+(max-note-id exactness), the rest use `per_page=100` pages (discussions
+newest-first — new-thread detection needs the fresh tail, resolve flips of
+old threads come from system notes).
+
+`--no-ci` excludes the CI category entirely: the CI pipeline for the
+current head is not requested (the sha-filter pipelines GET and its
+ref-pipeline fallback are both skipped; one GET saved from the ~six API
+budget), is not compared against the marker, and no CI line appears in the
+stdout summary. The marker structure does not change: the stored pipeline
+fields are not refreshed and keep their last saved values (a first-run
+baseline under `--no-ci` stores no pipeline fields). A CI change that
+happened during a `--no-ci` window is therefore detected by the next run
+without `--no-ci`, so the CI delta is not lost. Exit codes and the
+first-run baseline semantics are unchanged.
 
 Examples:
 
@@ -229,12 +340,68 @@ mr-has-updates.sh ai/streamflow/flowruntime 2067 && <run the agent>
 
 # default per-MR marker under <tools>/.state/has-updates/
 mr-has-updates.sh ai/streamflow/flowruntime 2067
+
+# a watcher that does not care about CI events
+mr-has-updates.sh ai/streamflow/flowruntime 2067 --state watch.json --no-ci
+```
+
+## mr-diff.sh
+
+```
+mr-diff.sh <project> <mr_iid> [--files|--stat|--hunks|--conflicts] [--repo <dir>]
+```
+
+The true local MR diff as a first-class command — the collapsed `/diffs`
+endpoint and the merge-base rule made operational. A usable clone is
+required; without one the script exits 1 with a clear message. Shas are
+recovered through the lib.sh ladder, and the diff always runs
+`<merge-base>..<head>` with the merge-base from `git merge-base` against
+the target branch (fallback `origin/main` / `origin/master`) — never from
+`diff_refs.start_sha` (on this instance it is the target-branch tip) and
+never as a two-dot `origin/<target>..<head>` (a target that moved ahead
+unfolds other authors' commits).
+
+Clone-freshness guard: when the clone lacks the true MR head, every mode
+prints a loud warning naming the expected head and the fallback tip and
+degrades to the local source-branch tip; a `--conflicts` verdict computed
+from the fallback head is labeled as such.
+
+Modes:
+
+- default — the full unified diff `<merge-base>..<head>`;
+- `--files` — one line per changed path with its status:
+  `new <path>`, `deleted <path>`, `renamed <old> -> <new>`,
+  `modified <path>`;
+- `--stat` — the diffstat: `<files> files, +<insertions>/-<deletions>`;
+- `--hunks` — the machine-readable new-side hunk ranges per changed file,
+  one line per file, `<path>\t<start>-<end> <start>-<end> ...` (a path
+  with no new side carries `-` in place of ranges) — the
+  anchor-validation source of truth; the ranges come from the SAME shared
+  construction (lib.sh `gt_hunks`) `mr-comment.sh` and
+  `mr-draft-review.sh` validate anchors against;
+- `--conflicts` — a write-free local merge simulation
+  (`git merge-tree --write-tree`) between the target-branch tip and the MR
+  head: exit `0` — the merge is clean, exit `1` — conflicts, with the
+  list of conflicting paths on stdout; a check that could not be performed
+  at all (no usable clone or head, a git failure) exits `3` with stderr
+  diagnostics.
+
+Exit codes: standard `0`/`1`/`2` for all modes except `--conflicts`, which
+owns the `0`/`1` pair as its verdict and adds `3` for
+could-not-be-performed; usage errors exit `2` in every mode. GET-only plus
+read-only clone use; nothing is fetched or written.
+
+Example:
+
+```
+mr-diff.sh ai/streamflow/flowruntime 2108 --hunks --repo ~/streamflow/flowruntime
 ```
 
 ## mr-threads.sh
 
 ```
-mr-threads.sh <project> <mr_iid> [--open|--all] [--ai-only] [--max-chars N] [--full]
+mr-threads.sh <project> <mr_iid> [--open|--all] [--ai-only] [--no-system]
+              [--max-chars N] [--full] [--repo <dir>]
 ```
 
 Dumps discussions as readable text: discussion id, resolved state (resolved
@@ -242,7 +409,15 @@ iff every non-system note has `resolved:true`), anchor `path:line` (new
 side; old side when there is no new line), authors, full note bodies
 (truncated to 400 chars by default; `--max-chars N` / `--full`). `--open`
 (default) keeps only unresolved threads; `--ai-only` keeps threads
-containing a note that starts with `AI generated: `. GET-only.
+containing a note that starts with the configured prefix
+(`GITLAB_COMMENT_PREFIX`, default `AI generated: `); `--no-system` drops
+notes with `system: true` from the dump — CI-bot progress comments bury
+the human review threads otherwise — and a thread consisting only of
+system notes is not printed at all; the trailing count line keeps its
+meaning (under `--no-system` the system-only threads drop out of the shown
+count), and the resolved state of a printed thread is still computed over
+its non-system notes. GET-only; no clone needed (`--repo` is accepted for
+interface uniformity).
 
 ## mr-comment.sh
 
@@ -256,8 +431,8 @@ endpoint, recovers real shas locally (fails with a clear message if shas are
 masked and no clone is available), validates `<line>` against locally built
 hunk ranges for `<path>`, refuses with the list of valid ranges if the line
 is outside a hunk (`--force` posts unpositioned with `path:line` prepended
-to the body, keeping the `AI generated: ` prefix first), then POSTs via the
-discussions API and verifies creation by GET. `--dry-run` prints the exact
+to the body, keeping the configured comment prefix first), then POSTs via
+the discussions API and verifies creation by GET. `--dry-run` prints the exact
 payload (including `position`) without POSTing.
 
 Example:
@@ -309,6 +484,7 @@ deletable: `glab api --hostname "$GITLAB_HOST" -X DELETE .../draft_notes/<id>`).
 
 ```
 mr-reply.sh <project> <mr_iid> <discussion_id> <body-or-@file> [--no-prefix] [--dry-run]
+            [--repo <dir>]
 ```
 
 Replies into an existing thread: tries REST
@@ -322,7 +498,7 @@ verifies again. `--dry-run` prints both payloads.
 ## mr-resolve.sh
 
 ```
-mr-resolve.sh <project> <mr_iid> <discussion_id> [--unresolve] [--dry-run]
+mr-resolve.sh <project> <mr_iid> <discussion_id> [--unresolve] [--dry-run] [--repo <dir>]
 ```
 
 Resolves (or with `--unresolve` unresolves) ONE thread via
@@ -347,14 +523,16 @@ JSON array of:
 
 - `{"action": "acknowledge"|"contest", "thread_hint": ..., "text": ...}` -
   the target thread is located by `thread_hint`, a substring of our original
-  note text (notes start with `AI generated: `); zero or several matching
+  note text (notes start with the configured prefix,
+  `GITLAB_COMMENT_PREFIX`); zero or several matching
   discussions is an error with the candidates listed - the plan is never
   built on a guess;
 - `{"action": "new", "path": ..., "line": N, "old_side": optional,
   "text": ...}` - the anchor is validated like mr-comment.sh; out-of-diff /
   out-of-hunk items are refused with the valid ranges.
 
-`text` is the body WITHOUT the `AI generated: ` prefix - the script adds it
+`text` is the body WITHOUT the comment prefix - the script adds the
+configured one (`GITLAB_COMMENT_PREFIX`)
 (a text already carrying it is not doubled). The full plan (target
 discussion, matched note, final body per item) is always printed before any
 write.
@@ -380,7 +558,7 @@ A sample verdict list is in `examples/verdicts.example.json`.
 ```
 mr-verify-posted.sh <project> <mr_iid> [--expect <expected.json>]
                      [--drafts] [--max-note-id] [--ai-only]
-                     [--max-chars N] [--full]
+                     [--max-chars N] [--full] [--repo <dir>]
 ```
 
 Read-only post-publish verifier: GET-only, no POST/PUT/DELETE is ever sent
@@ -396,7 +574,7 @@ use it instead of ad-hoc inline verification scripts). Three checks:
   with the max taken over every note of that page, so the within-page
   ordering never matters; this diverges from the mr-updates.sh full-list
   basis only if more than 100 notes share one `created_at`. With
-  `--ai-only` only notes starting with `AI generated: ` count.
+  `--ai-only` only notes starting with the configured prefix count.
 - `--expect <expected.json>` - verifies expected comment bodies against the
   discussions listing. The file uses the `mr-draft-review.sh`
   comments.json schema: `{"path":..., "line":N, "body":..., "old_side":
@@ -411,7 +589,8 @@ use it instead of ad-hoc inline verification scripts). Three checks:
   posted bodies, compared byte-exactly as given - an out-of-hunk batch
   item posts unpositioned with `path:line` prepended after the prefix
   (`mr-draft-review.sh`), so expect that prepended body for such items.
-  `--ai-only` narrows the candidate notes to `AI generated: ` ones.
+  `--ai-only` narrows the candidate notes to ones with the configured
+  prefix (`GITLAB_COMMENT_PREFIX`).
 
 Verdicts per expected item (each verdict line carries the discussion id,
 note id, anchor, and resolved flag):
@@ -497,3 +676,35 @@ changed title/description hashes, a different pipeline id/status, changed
 reviewer/approval sets, a merged+draft MR state) exited 0 with one summary
 line per category; a nonexistent project exited 3 with the HTTP 404
 diagnostics on stderr and no marker written; usage errors exited 2.
+
+The 2026-11-03 round (MR !2108, read-only + dry-run; the clone was stale on
+purpose, exercising the clone-freshness guard): `mr-auth-probe.sh` answered
+`ok <username>` (exit 0) on the working token whose `auth status` block
+still shows `! Invalid token provided`, and exit 1 with the host + HTTP 401
+diagnostic on a broken host; `mr-card.sh` (text and `--json`, with a clone,
+with a stale clone, and without one) printed the full card — approvals via
+the approvals endpoint, `blocking_discussions_resolved`, both merge
+statuses, the recovered head, `changes_count`, the diffstat (or the
+explicit no-clone NOTE; the first cut of the no-clone path died on an
+unset variable with exit 1 and no card — fixed and re-verified: the card
+prints, the NOTE goes to stderr, exit 0); `mr-diff.sh` ran all five modes — the stale clone
+degraded every mode to the local source-branch tip with the expected-head
+warning, and `--conflicts` labeled the fallback verdict and listed the
+conflicting paths (exit 1); `mr-has-updates.sh` recorded schema-4 baselines
+(with and without `--no-ci` — the `--no-ci` baseline stores no pipeline
+fields), kept the saved pipeline value across a `--no-ci` window, detected
+the CI delta on the switch-back run (exit 0), loaded a schema-3 marker
+without the new field as "not changed", and reported
+`merge status: blocking_discussions_resolved: false -> true` plus the
+approvals diff on a tampered marker; `mr-updates.sh` stored the schema-3
+marker (merge-status snapshot + approvals), printed nothing on an unchanged
+rerun, printed the `== merge status ==` section (one line per changed
+aspect) on a tampered marker, and re-upgraded a schema-2 marker without a
+false change; `mr-threads.sh --all` showed 11 system notes that
+`--no-system` dropped, with the system-only threads leaving the shown count
+(18 -> 7); `GITLAB_COMMENT_PREFIX='[ai] '` (the prefix the repository owner
+actually uses on that MR) drove the write-path prefix refusals and the
+`--ai-only` selections in `mr-comment.sh`, `mr-draft-review.sh`,
+`mr-threads.sh`, and `mr-verify-posted.sh`; `--repo <dir>` was validated
+(exit 2 on a nonexistent directory) in all twelve scripts that accept it.
+No comment, draft, reply, resolve, or publish was posted.

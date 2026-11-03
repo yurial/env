@@ -3,6 +3,7 @@
 # request via PUT .../discussions/<discussion_id>?resolved=true|false.
 #
 # usage: mr-resolve.sh <project> <mr_iid> <discussion_id> [--unresolve] [--dry-run]
+#                      [--repo <dir>]
 #
 # Guards (all decided by GET before any write):
 #   * the discussion must exist (missing id -> refuse);
@@ -14,8 +15,8 @@
 # verified by a follow-up GET. --dry-run prints the current state and the
 # exact request without sending anything. No batch mode by design: one call
 # resolves one thread, so a mistake cannot scale.
-# Every posted comment must start with "AI generated: " - not applicable
-# here (no comment bodies are written), kept out on purpose.
+# The comment-prefix rule is not applicable here (no comment bodies are
+# written), kept out on purpose.
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=lib.sh
@@ -24,29 +25,38 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 usage() {
   cat >&2 <<'EOF'
 usage: mr-resolve.sh <project> <mr_iid> <discussion_id> [--unresolve] [--dry-run]
+                     [--repo <dir>]
 
   --unresolve   unresolve the thread instead of resolving it
   --dry-run     print the current state and the request, send nothing
+  --repo DIR    accepted for interface uniformity (no clone needed;
+                clone is configured via GITLAB_REPO env or config.sh)
 EOF
   exit 2
 }
 
-proj="" iid="" did=""
+die_usage() { printf 'ERROR: %s\n' "$*" >&2; usage; }
+
+proj="" iid="" did="" repo_arg=""
 unresolve=0 dry=0
 while [ $# -gt 0 ]; do
   case "$1" in
     --unresolve) unresolve=1 ;;
     --dry-run) dry=1 ;;
+    --repo) [ $# -ge 2 ] || die_usage "--repo needs a directory"; repo_arg="$2"; shift ;;
     -h|--help) usage ;;
-    -*) gt_die "unknown option: $1" ;;
+    -*) die_usage "unknown option: $1" ;;
     *) if [ -z "$proj" ]; then proj="$1"
        elif [ -z "$iid" ]; then iid="$1"
        elif [ -z "$did" ]; then did="$1"
-       else gt_die "unexpected argument: $1"
+       else die_usage "unexpected argument: $1"
        fi ;;
   esac
   shift
 done
+# --repo is validated everywhere it is accepted, even though this script
+# makes no clone use of the value (R12.4)
+gt_repo_arg_ok "$repo_arg" || die_usage "--repo: no such directory: $repo_arg"
 # <project> may be omitted when GITLAB_DEFAULT_PROJECT is configured
 if [ -n "$iid" ] && [ -z "$did" ] && [ -n "$GITLAB_DEFAULT_PROJECT" ]; then
   did="$iid"; iid="$proj"; proj="$GITLAB_DEFAULT_PROJECT"
