@@ -16,7 +16,8 @@
 #               (clone is configured via GITLAB_REPO env or config.sh)
 #
 # Fields: title with a [DRAFT] mark, state, work_in_progress, author,
-# reviewers, approved_by (the approvals endpoint), blocking_discussions_resolved,
+# reviewers, approved_by + approved + approvals_required (the approvals
+# endpoint), blocking_discussions_resolved,
 # detailed_merge_status + legacy merge_status, branches, the recovered head
 # sha with its provenance (the masked-sha ladder: commits-endpoint id ->
 # short_id resolved locally -> git ls-remote -> local refs), changes_count,
@@ -110,7 +111,10 @@ mr_author="${f[4]}"; mr_reviewers="${f[5]}"; mr_blocking="${f[6]}"
 mr_dms="${f[7]}"; mr_ms="${f[8]}"; src_branch="${f[9]}"; tgt_branch="${f[10]}"
 api_head="${f[11]}"; changes_count="${f[12]}"; mr_url="${f[13]}"; mr_updated="${f[14]}"
 
-approved_by="$(python3 - "$GT_API_TMP/card.appr.json" <<'PY'
+# the approvals endpoint feeds three fields: the approved_by usernames plus
+# approved (boolean) and approvals_required (number or null); a failed or
+# unparsable response degrades to empty/none like the neighboring fields
+python3 - "$GT_API_TMP/card.appr.json" > "$GT_API_TMP/card.appr.fields" <<'PY'
 import json, sys
 try:
     a = json.loads(open(sys.argv[1]).readline())
@@ -118,8 +122,16 @@ except Exception:
     a = {}
 print(", ".join(sorted((x.get("user") or {}).get("username") or ""
                        for x in a.get("approved_by") or [])))
+print("true" if a.get("approved") else "false")
+req = a.get("approvals_required")
+try:
+    req = "" if req is None else str(int(req))
+except (TypeError, ValueError):
+    req = ""
+print(req)
 PY
-)"
+mapfile -t af < "$GT_API_TMP/card.appr.fields"
+approved_by="${af[0]}"; mr_approved="${af[1]}"; approvals_required="${af[2]}"
 
 # ---- the masked-sha ladder for the head (R13.8) ---------------------------
 head_sha=""; head_short=""; head_src=""
@@ -207,12 +219,13 @@ fi
 # ---- output ---------------------------------------------------------------
 python3 - "$GT_API_TMP/card.mr.json" "$diffstat_file" "$json" "$max_chars" \
          "$proj" "$iid" "$head_sha" "$head_src" "$api_head" "$approved_by" \
+         "$mr_approved" "$approvals_required" \
          "$mr_reviewers" "$mr_blocking" "$base_sha" "$diff_head" <<'PY'
 import json, sys
 
 (mr_path, stat_path, json_out, max_chars, proj, iid,
- head_sha, head_src, api_head, approved_by, reviewers, blocking, base_sha,
- diff_head) = sys.argv[1:15]
+ head_sha, head_src, api_head, approved_by, approved, appr_req, reviewers,
+ blocking, base_sha, diff_head) = sys.argv[1:17]
 json_out = json_out == "1"
 max_chars = int(max_chars)
 
@@ -242,6 +255,8 @@ card = {
     "author": (mr.get("author") or {}).get("username") or "",
     "reviewers": [u for u in reviewers.split(", ") if u],
     "approved_by": [u for u in approved_by.split(", ") if u],
+    "approved": approved == "true",
+    "approvals_required": int(appr_req) if appr_req else None,
     "blocking_discussions_resolved": mr.get("blocking_discussions_resolved"),
     "detailed_merge_status": mr.get("detailed_merge_status") or "",
     "merge_status": mr.get("merge_status") or "",
@@ -267,6 +282,8 @@ print(f"   url:   {card['web_url']}")
 print(f"   author: {card['author']}")
 print(f"   reviewers: {', '.join(card['reviewers']) or '(none)'}")
 print(f"   approved by: {', '.join(card['approved_by']) or '(none)'}")
+req_txt = card['approvals_required'] if card['approvals_required'] is not None else '?'
+print(f"   approved: {'true' if card['approved'] else 'false'} (approvals_required: {req_txt})")
 print(f"   blocking_discussions_resolved: {blocking}")
 print(f"   detailed_merge_status: {card['detailed_merge_status']}")
 print(f"   merge_status: {card['merge_status']}")
