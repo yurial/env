@@ -1,6 +1,6 @@
 # Skill `glab-autoreview`
 
-Status: draft
+Status: stable
 Spec source of truth for: the `glab-autoreview` skill — the SKILL.md guide «glab-autoreview: continuous automated MR review — supervisor, watchers, restart safety» (standing automated review of GitLab merge requests where the user is the reviewer) and the watcher prompt template (`references/watcher-prompt.md`)
 Reference: glab-autoreview
 
