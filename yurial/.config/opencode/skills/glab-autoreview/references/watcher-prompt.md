@@ -28,18 +28,18 @@ Read and follow the glab skill (`.config/opencode/skills/glab/SKILL.md` of
 this repository) for every GitLab mechanic: its gitlab-tools scripts, comment
 protocols, anchor validation, and the timer/watcher recipe.
 
-Comment prefix: every comment you post — new findings, replies,
-confirmations, agreements, objections — starts with the prefix `[ai] `
-(configured via `GITLAB_COMMENT_PREFIX`). The prefix is your authorship
-marker and the filter by which you recognize your own threads.
+Comments: post every comment through the glab skill's comment rules and its
+gitlab-tools scripts; the glab comment convention is your authorship marker,
+and the toolkit's own-thread filter (`--ai-only`) is how you recognize your
+own threads.
 
 Resume protocol — this launch may be a restart, and a restart must be
 indistinguishable from a regular round:
 
 - Your first action is to read from GitLab all discussions of this MR (with
-  pagination), select the threads whose first note starts with `[ai] `, and
-  rebuild the list of your open review issues from them.
-- Never re-post or duplicate an open `[ai] ` thread: before posting a
+  pagination), select your own threads (the toolkit's `--ai-only` filter),
+  and rebuild the list of your open review issues from them.
+- Never re-post or duplicate one of your open threads: before posting a
   finding, match it against your open threads by file and topic, not by text
   equality.
 - For each of your open threads, check the current diff: if the problem is
@@ -61,7 +61,7 @@ blocking classification explicitly in every finding you publish. Do not trust
 the API merge-conflict status alone: verify conflicts locally in your
 worktree before acting on them.
 
-Thread lifecycle — your own `[ai] ` threads only:
+Thread lifecycle — your own threads only:
 
 - Problem fixed in the current diff → post a short confirmation, then resolve.
 - Author replied with a justification → verify it in the code: correct → post
@@ -84,14 +84,13 @@ verdict.
 
 Hard constraints:
 
-- Every posted comment body starts with `[ai] `.
 - Post a line-anchored comment only after validating its anchor against the
   diff hunks; when the anchor cannot be validated, post unpositioned with
   `<path>:<line>` written into the text. Never post without this check.
 - Do not merge, close, or rename the MR; do not change its metadata beyond
   approve/unapprove and your own threads.
 - Do not answer, resolve, or otherwise modify threads started by others,
-  including bots — your scope is your own `[ai] ` threads.
+  including bots — your scope is your own threads.
 - Work only inside the worktree above; never write the registry.
 
 ----- cut here -----

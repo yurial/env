@@ -6,7 +6,7 @@ Reference: glab-autoreview
 
 ## Overview
 
-The `glab-autoreview` skill governs a standing automated review service for GitLab merge requests on which the user is the reviewer. It is a two-level orchestration over the `glab` skill: a supervisor on the main agent — an hourly scheduler whose gate command is the fresh reviewer listing (`mr-list.sh --role reviewer --state opened`), a registry comparison, watcher launches under a slot limit with a pending-launch queue, and completion control for closed or merged MRs — and per-MR watcher subagents, each with its own short-interval scheduler, a dedicated worktree, and full ownership of one MR's review: comments, replies, thread resolution, and the approve state. The skill's normative core is restart safety: every watcher run resumes by reading the full discussion state from GitLab, open own threads are never re-posted or duplicated, and a restart is indistinguishable from a regular round. The behavioral contracts fix the `[ai] ` comment prefix (via `GITLAB_COMMENT_PREFIX`) as authorship marker and own-thread filter, line-anchored posting only after anchor validation against diff hunks with the unpositioned fallback, the approve invariant in both directions, the own-thread lifecycle (confirm and resolve fixed, agree and resolve justified, contest wrong), watcher completion on closed or merged MRs, the anti-blocking discipline (publish validated findings immediately, publish subagent findings as a follow-up, return a result after each completed step), the watcher prompt contract (task and requirements only, no recipes), the three-part stop, and the registry contract (states, sections, single-writer). The skill inherits every GitLab mechanic from the `glab` skill by section reference and does not restate it (R1.1).
+The `glab-autoreview` skill governs a standing automated review service for GitLab merge requests on which the user is the reviewer. It is a two-level orchestration over the `glab` skill: a supervisor on the main agent — an hourly scheduler whose gate command is the fresh reviewer listing (`mr-list.sh --role reviewer --state opened`), a registry comparison, watcher launches under a slot limit with a pending-launch queue, and completion control for closed or merged MRs — and per-MR watcher subagents, each with its own short-interval scheduler, a dedicated worktree, and full ownership of one MR's review: comments, replies, thread resolution, and the approve state. The skill's normative core is restart safety: every watcher run resumes by reading the full discussion state from GitLab, open own threads are never re-posted or duplicated, and a restart is indistinguishable from a regular round. The behavioral contracts cover thread ownership (own threads are recognized mechanically through the `glab` skill's comment conventions and its toolkit's own-thread filter), line-anchored posting only after anchor validation against diff hunks with the unpositioned fallback, the approve invariant in both directions, the own-thread lifecycle (confirm and resolve fixed, agree and resolve justified, contest wrong), watcher completion on closed or merged MRs, the anti-blocking discipline (publish validated findings immediately, publish subagent findings as a follow-up, return a result after each completed step), the watcher prompt contract (task and requirements only, no recipes), the three-part stop, and the registry contract (states, sections, single-writer). The skill inherits every GitLab mechanic from the `glab` skill by section reference and does not restate it (R1.1).
 
 The skill activates when the user asks for continuous, standing review of GitLab merge requests where they are the reviewer: watching all MRs awaiting their review in a project, resuming review state across restarts and session changes, maintaining the approve state according to the invariant, processing author replies in the watcher's own threads, and stopping the whole service on demand (R14.4). The canonical trigger text is the frontmatter `description` (Interface). The skill does not activate for one-off reviews without monitoring, for other GitLab work, or for other forges (Scope, Out).
 
@@ -14,12 +14,11 @@ The skill activates when the user asks for continuous, standing review of GitLab
 
 In:
 - the relationship to the `glab` skill: build on it by section reference, no duplication, mechanics-versus-orchestration ownership (R1.1);
-- the prefix fixation `[ai] ` via `GITLAB_COMMENT_PREFIX` as authorship marker and own-thread filter (R1.2);
 - the supervisor: hourly scheduler, gate command over `mr-list.sh`, registry comparison, watcher launches, slot limit with pending-launch queue, completion control, restart tolerance, the no-direct-MR-writes rule (R2.1..R2.7);
 - the registry: location, entry format, states, sections, single writer, arbitration role against legal duplicate sessions (R3.1..R3.3);
 - restart safety: resumption instead of a fresh start, mandatory first read of all discussions, no re-posting or duplication of open own threads, fixed-check before new findings, GitLab as the source of truth, session-change tolerance (R4.1..R4.6);
 - the watcher round: the short-interval scheduler with the has-updates gate, the round order (R5.1, R5.2);
-- prefix and ownership: the prefix on every posted body, the mechanical own-thread selection, the prohibition on touching others' threads including bots (R6.1..R6.3);
+- thread ownership: the mechanical own-thread selection through the `glab` skill's comment conventions, the prohibition on touching others' threads including bots (R6.1..R6.3);
 - anchors: client-side hunk validation before any positioned post, the unpositioned fallback with `<path>:<line>` in the text (R7.1, R7.2);
 - the approve invariant in both directions, the blocking classification of findings, the local merge-tree check over the API merge status (R8.1..R8.4);
 - the own-thread lifecycle: confirm-and-resolve, agree-and-resolve, contest, resolve discipline (R9.1..R9.3);
@@ -43,7 +42,7 @@ Out (non-goals):
 - `glab-autoreview/watcher` — one subagent of subagent type `watcher-subagent-type` per watched MR, owning that MR's review: comments, replies, thread resolution, and the approve state (R2.4, R6, R8, R9).
 - `glab-autoreview/round` — one pass of a watcher: resume read, state refresh, open-thread triage, delta review, publication, approve update, summary (R5.2).
 - `glab-autoreview/registry` — the file at `registry-path`: the single bookkeeping artifact of the service, written by the supervisor alone and read by watchers for orientation (R3.1, R3.2).
-- `glab-autoreview/own-thread` — a discussion of the watched MR whose first non-system note starts with `watcher-comment-prefix`; the write scope of the watcher is its own threads, the approve state, and nothing else (R6.2, R6.3).
+- `glab-autoreview/own-thread` — a discussion of the watched MR whose first non-system note is one of the watcher's own comments, recognized mechanically by the `glab` skill's comment rule through the toolkit's own-thread filter; the write scope of the watcher is its own threads, the approve state, and nothing else (R6.2, R6.3).
 - `glab-autoreview/open-issue` — an own thread of the watcher that is not resolved; the set of open issues is rebuilt from GitLab on every run (R4.2).
 - `glab-autoreview/blocking-problem` — a problem that must be fixed before merge; every published finding states its blocking classification explicitly, which keeps the approve invariant decidable from the published threads (R8.1, R8.3).
 - `glab-autoreview/restart-safety` — the property that any launch of a watcher — first, scheduled, or restarted — resumes from the GitLab discussion state and is indistinguishable from a regular round (R4.1).
@@ -60,7 +59,7 @@ Frontmatter (canonical, verbatim):
 ```yaml
 ---
 name: glab-autoreview
-description: "Use when the user asks for continuous automated review of GitLab merge requests where the user is the reviewer: a standing hourly supervisor on the main agent (gate command mr-list.sh --role reviewer --state opened --project <group/project>, registry comparison in ~/tmp/mr-watch/registry.md, watcher launches under a slot limit with a pending-launch queue, completion control for closed/merged MRs), one watcher subagent (assistant_high) per MR with its own 15-minute scheduler and dedicated worktree (~/wt/<repo>/mr-<iid>, branch mr-<iid> from origin/main, passed as the first Worktree: line), restart-safe review rounds (every run resumes by reading all MR discussions from GitLab with pagination; open [ai] threads are never re-posted or duplicated — matching is by file and topic), the `[ai] ` comment prefix set via GITLAB_COMMENT_PREFIX as both authorship marker and own-thread filter, line-anchored comments only after anchor validation against diff hunks with the unpositioned <path>:<line> fallback, the approve invariant (approve present iff no unresolved blocking problems; unapprove when new blockers appear; non-blocking remarks never cancel an approve), own-thread lifecycle (confirm and resolve fixed threads, agree and resolve justified author replies verified in code, contest wrong replies with facts, never touch others' threads including bots), watcher completion on closed/merged MRs (scheduler removed, approve settled, final summary), anti-blocking discipline (publish validated findings immediately, publish subagent findings as a follow-up, return a result after each completed step), the three-part stop (abort sessions, remove the supervisor scheduler, tell watchers to remove theirs), and traps: stale merge_status vs the local merge-tree check, legal duplicate watcher sessions arbitrated by the registry, project-path 404 resolved via search?scope=projects, glab api exiting 0 on HTTP errors. Builds on the glab skill (gitlab-tools, comment protocols, scope=all, draft review flow) for all underlying mechanics. Use ONLY for continuous GitLab MR review with monitoring, not for one-off reviews without monitoring, other GitLab work, or other forges."
+description: "Use when the user asks for continuous automated review of GitLab merge requests where the user is the reviewer: a standing hourly supervisor on the main agent (gate command mr-list.sh --role reviewer --state opened --project <group/project>, registry comparison in ~/tmp/mr-watch/registry.md, watcher launches under a slot limit with a pending-launch queue, completion control for closed/merged MRs), one watcher subagent (assistant_high) per MR with its own 15-minute scheduler and dedicated worktree (~/wt/<repo>/mr-<iid>, branch mr-<iid> from origin/main, passed as the first Worktree: line), restart-safe review rounds (every run resumes by reading all MR discussions from GitLab with pagination; open own threads are never re-posted or duplicated — matching is by file and topic), line-anchored comments only after anchor validation against diff hunks with the unpositioned <path>:<line> fallback, the approve invariant (approve present iff no unresolved blocking problems; unapprove when new blockers appear; non-blocking remarks never cancel an approve), own-thread lifecycle (confirm and resolve fixed threads, agree and resolve justified author replies verified in code, contest wrong replies with facts, never touch others' threads including bots), watcher completion on closed/merged MRs (scheduler removed, approve settled, final summary), anti-blocking discipline (publish validated findings immediately, publish subagent findings as a follow-up, return a result after each completed step), the three-part stop (abort sessions, remove the supervisor scheduler, tell watchers to remove theirs), and traps: stale merge_status vs the local merge-tree check, legal duplicate watcher sessions arbitrated by the registry, project-path 404 resolved via search?scope=projects, glab api exiting 0 on HTTP errors. Builds on the glab skill (gitlab-tools, comment protocols, scope=all, draft review flow) for all underlying mechanics. Use ONLY for continuous GitLab MR review with monitoring, not for one-off reviews without monitoring, other GitLab work, or other forges."
 ---
 ```
 
@@ -75,12 +74,12 @@ SKILL.md document structure (mapping to requirements):
 ```
 # glab-autoreview: continuous automated MR review — supervisor, watchers, restart safety
 <intro: purpose, two levels, relation to glab, instance-observation caveat, placeholder notice>
-## 1. Relationship to the glab skill                     — R1.1, R1.2
+## 1. Relationship to the glab skill                     — R1.1
 ## 2. Architecture: supervisor and per-MR watchers       — R2.1..R2.7
 ## 3. The registry                                       — R3.1..R3.3
 ## 4. Restart safety: every run resumes (critical)       — R4.1..R4.6
 ## 5. The watcher round                                  — R5.1, R5.2
-## 6. Comment prefix `[ai] ` and thread ownership        — R6.1..R6.3
+## 6. Thread ownership                                     — R6.1..R6.3
 ## 7. Anchors: validate before posting                   — R7.1, R7.2
 ## 8. The approve invariant                              — R8.1..R8.4
 ## 9. Own-thread lifecycle: fixed, justified, contested  — R9.1..R9.3
@@ -91,7 +90,7 @@ SKILL.md document structure (mapping to requirements):
 ## 14. Traps (consolidated)                              — R14.3 (trap highlighting)
 ```
 
-The section order is canonical: the glab relationship comes first; the architecture precedes its artifacts; restart safety — the normative core — precedes the round it governs; the behavioral contracts (prefix, anchors, approve, lifecycle) follow the round; completion and anti-blocking discipline follow the contracts; the prompt contract and the stop procedure close the operational part; the consolidated traps close the document.
+The section order is canonical: the glab relationship comes first; the architecture precedes its artifacts; restart safety — the normative core — precedes the round it governs; the behavioral contracts (thread ownership, anchors, approve, lifecycle) follow the round; completion and anti-blocking discipline follow the contracts; the prompt contract and the stop procedure close the operational part; the consolidated traps close the document.
 
 Named components:
 
@@ -109,13 +108,11 @@ Named components:
 - `watcher-subagent-type`: string; `assistant_high`; fixed; the subagent type every watcher is launched as.
 - `registry-path`: string; `~/tmp/mr-watch/registry.md`; fixed; the location of the registry file.
 - `watcher-worktree-pattern`: string; `~/wt/<repo>/mr-<iid>`; fixed; the worktree of a watcher, on branch `mr-<iid>` created from `origin/main`.
-- `watcher-comment-prefix`: string; `[ai] `; fixed; the owner-prescribed value of `GITLAB_COMMENT_PREFIX` for this review context (environment or glab `tools/config.sh`, precedence per the glab skill); the authorship marker and own-thread filter of every watcher write and selection.
 
 ## Requirements
 
 - R1. Relationship to the glab skill:
-- R1.1. verification=manual; Build on glab, reference, never duplicate. The skill performs every GitLab mechanic through the `glab` skill — its rules and its gitlab-tools toolkit — and cites the concrete glab sections (comment prefix, anchors and batch posting, draft review, pagination, reading discussions, replies and resolve, the toolkit and timer/watcher recipe) instead of restating their text; on any conflict the glab skill owns the mechanics while this skill owns only the orchestration policy above them.
-- R1.2. verification=manual; Prefix fixation. The review context runs with `watcher-comment-prefix` as the owner-prescribed value of `GITLAB_COMMENT_PREFIX` (environment or glab `tools/config.sh`, precedence per the glab skill): every body a watcher posts and every own-thread selection under this skill uses this prefix; the glab skill's built-in default stays in force for contexts without an owner prescription.
+- R1.1. verification=manual; Build on glab, reference, never duplicate. The skill performs every GitLab mechanic through the `glab` skill — its rules and its gitlab-tools toolkit — and cites the concrete glab sections (comments, anchors and batch posting, draft review, pagination, reading discussions, replies and resolve, the toolkit and timer/watcher recipe) instead of restating their text; on any conflict the glab skill owns the mechanics while this skill owns only the orchestration policy above them.
 - R2. The supervisor:
 - R2.1. verification=manual; Hourly gate listing. The supervisor holds a scheduler at `supervisor-tick-interval` whose gate command prints the fresh list of MRs awaiting the user's review in the project — `mr-list.sh --role reviewer --state opened --project <group/project>` (scope=all and pagination built into the tool); a gate exit `0` fires the tick, a nonzero gate skips the fire and retries on the next tick, and every fire compares the fresh listing against the registry before anything is launched.
 - R2.2. verification=manual; New-MR intake. An MR found by the gate and absent from the registry gets a worktree per `watcher-worktree-pattern` (branch `mr-<iid>` from `origin/main`), a registry entry in state pending-launch, and a watcher launch as soon as a slot is free.
@@ -130,7 +127,7 @@ Named components:
 - R3.3. verification=manual; Registry as arbiter. The registry is the single arbiter of watcher duty: duplicate watcher sessions on one MR are legal (a cancelled wave and a relaunched session may coexist), and the decision whether an MR needs a watcher is made from the registry state alone, never from task-list history.
 - R4. Restart safety:
 - R4.1. verification=manual; Resumption, not fresh start. A watcher always resumes and never starts from scratch: any launch — first, scheduled, or restarted — behaves as one more round, and a restart is indistinguishable from a regular round.
-- R4.2. verification=manual; Mandatory first read. The first action of every watcher run is reading from GitLab all discussions of the MR with full pagination, selecting the own threads by `watcher-comment-prefix`, and rebuilding the open-issue list from them — before any other step of the round.
+- R4.2. verification=manual; Mandatory first read. The first action of every watcher run is reading from GitLab all discussions of the MR with full pagination, selecting the own threads (mechanically, via the toolkit's own-thread filter under the glab skill's comment rule), and rebuilding the open-issue list from them — before any other step of the round.
 - R4.3. verification=manual; No re-posting, no duplication. Open own threads are never re-posted and never duplicated: a candidate finding is matched against the open own threads by file and topic, never by byte equality of the text.
 - R4.4. verification=manual; Fixed-check before new findings. Each open own thread is checked against the current diff of the MR for being fixed before new findings are gathered.
 - R4.5. verification=manual; GitLab as the source of truth. GitLab is the source of truth of the review context: the registry and local state markers are auxiliary, and their loss is recoverable by re-reading GitLab.
@@ -138,9 +135,9 @@ Named components:
 - R5. The watcher round:
 - R5.1. verification=manual; Watcher scheduler. The watcher keeps its own scheduler at `watcher-tick-interval` with the boolean has-updates gate of the glab skill's timer/watcher recipe (the marker file and the clone pinning belong to the watcher, the clone being its worktree); every fire runs exactly one round.
 - R5.2. verification=manual; Round order. A round runs in this order: the resume read (R4.2..R4.4) → fresh MR state (the card; the true local diff from the merge base) → triage of open own threads (R9) → review of new commits since the previous round → publication of new findings (R6, R7) → approve update (R8) → the round summary.
-- R6. Prefix and ownership:
-- R6.1. verification=manual; Prefix on every body. Every body the watcher posts — findings, replies, confirmations, agreements, objections — starts with `watcher-comment-prefix`.
-- R6.2. verification=manual; Mechanical own-thread selection. A discussion counts as an own thread exactly when its first non-system note starts with `watcher-comment-prefix`; the selection is mechanical, through the toolkit's own-thread filter.
+- R6. Thread ownership:
+- R6.1. verification=manual; Comments through the glab skill. Every body the watcher posts — findings, replies, confirmations, agreements, objections — is published through the `glab` skill's comment rules and its gitlab-tools toolkit (R1.1); this skill keeps no comment convention of its own.
+- R6.2. verification=manual; Mechanical own-thread selection. A discussion counts as an own thread exactly when its first non-system note is recognized as a watcher comment by the `glab` skill's comment rule; the selection is mechanical, through the toolkit's own-thread filter.
 - R6.3. verification=manual; Others' threads untouched. The watcher never answers, resolves, or otherwise modifies threads started by others, including bot threads; its write scope is its own threads, the approve state, and nothing else.
 - R7. Anchors:
 - R7.1. verification=manual; Validate before positioning. A line-anchored comment is posted only after its anchor passes client-side validation against the diff hunk ranges (the glab skill's anchor rules; the toolkit refuses outside-hunk anchors).
@@ -162,7 +159,7 @@ Named components:
 - R11.2. verification=manual; Result per completed step. The watcher returns a result after each completed step of a round and never parks in a waiting state; a round ends with its summary.
 - R11.3. verification=manual; Task and requirements only. The watcher prompt carries the task and the requirements only — no how-to recipes; the choice of methods stays with the watcher, with the glab skill as its mechanical reference.
 - R12. The watcher prompt:
-- R12.1. verification=manual; Mandatory elements. The watcher prompt is built from the template in `references/watcher-prompt.md` and always contains: the `Worktree: <path>` first line; a reference to the glab skill; the explicit prefix norm (`watcher-comment-prefix` on every posted body); the resume section (the R4 rules); and the hard constraints — no merging, closing, or renaming of the MR, no answering others' threads, no posting without anchor validation.
+- R12.1. verification=manual; Mandatory elements. The watcher prompt is built from the template in `references/watcher-prompt.md` and always contains: the `Worktree: <path>` first line; a reference to the glab skill; the resume section (the R4 rules); and the hard constraints — no merging, closing, or renaming of the MR, no answering others' threads, no posting without anchor validation.
 - R12.2. verification=manual; Template currency. The template in `references/watcher-prompt.md` is the current authoritative prompt text and is updated in the same change as any skill rule that affects it.
 - R13. The stop:
 - R13.1. verification=manual; Three-part stop. A complete stop of the service consists of three parts, all mandatory: aborting the running watcher sessions; removing the supervisor's own scheduler; and messaging the finished watchers to remove their schedulers and finish — aborting sessions does not remove schedulers created inside them, and omitting the third part leaves zombie rounds.
@@ -177,13 +174,10 @@ Named components:
 - R15.2. verification=manual; The no-duplication rule for open own threads (R4.3) is inviolable.
 - R15.3. verification=manual; The mandatory first read of the full GitLab discussion state on every watcher run (R4.2) is inviolable.
 - R15.4. verification=manual; The three-part stop (R13.1) is inviolable: no stop procedure may drop any of its parts.
-- R15.5. verification=manual; The prefix rule (R1.2, R6.1) is inviolable while this skill governs the context: every posted body starts with `watcher-comment-prefix`; changing the prefix value is an owner decision recorded in Configuration, not a revision side effect.
-- R15.6. verification=manual; Revision monotonicity: a revision may extend or refine existing rules but must not silently weaken or remove any rule present in the previous version.
+- R15.5. verification=manual; Revision monotonicity: a revision may extend or refine existing rules but must not silently weaken or remove any rule present in the previous version.
 
 ## Examples
 
-- E1. Relationship to the glab skill:
-- E1.2. R1.2 subtree (observed pattern): the repository owner required `[ai] ` as the machine-comment marker on their MRs; the review context runs with `GITLAB_COMMENT_PREFIX='[ai] '` so the toolkit's write checks and own-thread filters all operate on `[ai] ` while contexts without an owner prescription keep the glab built-in default.
 - E3. The registry:
 - E3.3. R3.3 subtree (incident pattern): after a cancelled launch wave, two watcher sessions existed for one MR — the cancelled one and the relaunched one; the registry (one entry in state watching) correctly showed one watcher duty, and the two-session task history was irrelevant to the decision.
 - E4. Restart safety:
@@ -204,7 +198,7 @@ Named components:
 ## Error handling
 
 - A divergence between SKILL.md, the watcher-prompt template, and this specification is either a spec gap (fix the spec) or a skill bug (fix the skill document); silent tolerance is forbidden.
-- An unverifiable or instance-specific claim is removed or explicitly marked instance-dependent (R14.3); removal of content carrying an invariant is forbidden — re-verify instead (R15.6).
+- An unverifiable or instance-specific claim is removed or explicitly marked instance-dependent (R14.3); removal of content carrying an invariant is forbidden — re-verify instead (R15.5).
 - Scheduler gate failures follow the glab timer/watcher discipline: a failed gate skips the fire without an alert and retries on the next tick; a delta is never lost to a skipped fire.
 - A watcher that cannot complete a step returns with the failure stated in the round summary; the next round re-enters through the resume read (R4.1..R4.6), so a failed round never corrupts the review state.
 

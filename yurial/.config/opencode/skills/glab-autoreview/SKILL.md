@@ -1,6 +1,6 @@
 ---
 name: glab-autoreview
-description: "Use when the user asks for continuous automated review of GitLab merge requests where the user is the reviewer: a standing hourly supervisor on the main agent (gate command mr-list.sh --role reviewer --state opened --project <group/project>, registry comparison in ~/tmp/mr-watch/registry.md, watcher launches under a slot limit with a pending-launch queue, completion control for closed/merged MRs), one watcher subagent (assistant_high) per MR with its own 15-minute scheduler and dedicated worktree (~/wt/<repo>/mr-<iid>, branch mr-<iid> from origin/main, passed as the first Worktree: line), restart-safe review rounds (every run resumes by reading all MR discussions from GitLab with pagination; open [ai] threads are never re-posted or duplicated — matching is by file and topic), the `[ai] ` comment prefix set via GITLAB_COMMENT_PREFIX as both authorship marker and own-thread filter, line-anchored comments only after anchor validation against diff hunks with the unpositioned <path>:<line> fallback, the approve invariant (approve present iff no unresolved blocking problems; unapprove when new blockers appear; non-blocking remarks never cancel an approve), own-thread lifecycle (confirm and resolve fixed threads, agree and resolve justified author replies verified in code, contest wrong replies with facts, never touch others' threads including bots), watcher completion on closed/merged MRs (scheduler removed, approve settled, final summary), anti-blocking discipline (publish validated findings immediately, publish subagent findings as a follow-up, return a result after each completed step), the three-part stop (abort sessions, remove the supervisor scheduler, tell watchers to remove theirs), and traps: stale merge_status vs the local merge-tree check, legal duplicate watcher sessions arbitrated by the registry, project-path 404 resolved via search?scope=projects, glab api exiting 0 on HTTP errors. Builds on the glab skill (gitlab-tools, comment protocols, scope=all, draft review flow) for all underlying mechanics. Use ONLY for continuous GitLab MR review with monitoring, not for one-off reviews without monitoring, other GitLab work, or other forges."
+description: "Use when the user asks for continuous automated review of GitLab merge requests where the user is the reviewer: a standing hourly supervisor on the main agent (gate command mr-list.sh --role reviewer --state opened --project <group/project>, registry comparison in ~/tmp/mr-watch/registry.md, watcher launches under a slot limit with a pending-launch queue, completion control for closed/merged MRs), one watcher subagent (assistant_high) per MR with its own 15-minute scheduler and dedicated worktree (~/wt/<repo>/mr-<iid>, branch mr-<iid> from origin/main, passed as the first Worktree: line), restart-safe review rounds (every run resumes by reading all MR discussions from GitLab with pagination; open own threads are never re-posted or duplicated — matching is by file and topic), line-anchored comments only after anchor validation against diff hunks with the unpositioned <path>:<line> fallback, the approve invariant (approve present iff no unresolved blocking problems; unapprove when new blockers appear; non-blocking remarks never cancel an approve), own-thread lifecycle (confirm and resolve fixed threads, agree and resolve justified author replies verified in code, contest wrong replies with facts, never touch others' threads including bots), watcher completion on closed/merged MRs (scheduler removed, approve settled, final summary), anti-blocking discipline (publish validated findings immediately, publish subagent findings as a follow-up, return a result after each completed step), the three-part stop (abort sessions, remove the supervisor scheduler, tell watchers to remove theirs), and traps: stale merge_status vs the local merge-tree check, legal duplicate watcher sessions arbitrated by the registry, project-path 404 resolved via search?scope=projects, glab api exiting 0 on HTTP errors. Builds on the glab skill (gitlab-tools, comment protocols, scope=all, draft review flow) for all underlying mechanics. Use ONLY for continuous GitLab MR review with monitoring, not for one-off reviews without monitoring, other GitLab work, or other forges."
 ---
 
 # glab-autoreview: continuous automated MR review — supervisor, watchers, restart safety
@@ -28,19 +28,17 @@ guaranteed on other instances. Every identifier in examples is a placeholder:
 - The skill builds on glab, it does not replace it. Before working under this
   skill, load the glab skill: the watcher's every GitLab operation goes
   through its rules and its toolkit.
-- Reference, never duplicate: this document cites glab sections (§9 prefix,
+- Reference, never duplicate: this document cites glab sections (§9 comments,
   §10 anchors and batch posting, §11 draft review, §13 pagination, §17
   reading discussions, §19 replies and resolve, §22 toolkit and the
   timer/watcher recipe). On any conflict glab owns the mechanics; this skill
   owns only the orchestration policy above them.
-- Prefix fixation: glab §9 ships `AI generated: ` as the built-in default and
-  lets the owner prescribe another text via `GITLAB_COMMENT_PREFIX`
-  (environment > glab `tools/config.sh` > default). This review context runs
-  with the owner-prescribed prefix `[ai] ` — set it once in the environment
-  or in glab `tools/config.sh`, and every toolkit write check and every
-  `--ai-only` filter operates on `[ai] `. The double role of the prefix —
-  authorship marker and own-thread filter — is what the whole resume protocol
-  (section 4) rests on.
+- Comment identity: comments are posted through the glab skill's comment
+  rules and its toolkit (§9, §22); the same convention doubles as the
+  authorship marker by which the toolkit's own-thread filter (`--ai-only`)
+  recognizes the watcher's threads — the foundation the resume protocol
+  (section 4) rests on. The prefix value and its configuration belong to
+  the glab skill alone; this skill fixes none.
 
 ## 2. Architecture: supervisor and per-MR watchers
 
@@ -110,9 +108,9 @@ round.
 - The first action of every run — first launch, scheduled fire, or restart,
   no exceptions — is to read from GitLab all discussions of the MR, with full
   pagination (glab §13, §17; mechanically `mr-threads.sh --ai-only`), select
-  the own threads (first note starts with `[ai] `, section 6), and rebuild
-  the list of open review issues from them.
-- Open `[ai]` threads are never re-posted and never duplicated. Before
+  the own threads (section 6), and rebuild the list of open review issues
+  from them.
+- Open own threads are never re-posted and never duplicated. Before
   posting a finding, match it against the open threads by file and topic —
   wording changes between rounds are expected; byte equality of the text is
   not the criterion (trap: a rephrased finding posted as a new thread is a
@@ -138,20 +136,23 @@ self-contained; return after completed steps — section 11):
 3. Triage open own threads (section 9): fixed → confirm and resolve; the
    author replied → verify the justification → agree and resolve, or contest.
 4. Review new commits since the previous round for new findings.
-5. Publish new findings: anchors validated (section 7), prefix on (section 6),
-   a batch via the draft review flow (`mr-draft-review.sh`, publish, then
+5. Publish new findings: anchors validated (section 7), a batch via the
+   draft review flow (`mr-draft-review.sh`, publish, then
    `mr-verify-posted.sh` — glab §11, §22).
 6. Update the approve state per the invariant (section 8).
 7. Return the round summary: findings posted, threads opened/closed/resolved,
    approve action taken, open blockers remaining.
 
-## 6. Comment prefix `[ai] ` and thread ownership
+## 6. Thread ownership
 
 - Every body the watcher posts — findings, replies, confirmations,
-  agreements, objections — starts with `[ai] ` (the glab §9 rule carried by
-  the configured prefix; section 1). The toolkit refuses bodies without it.
-- An own thread is a discussion whose first non-system note starts with
-  `[ai] `. The selection is mechanical: `mr-threads.sh --ai-only` (and
+  agreements, objections — is published through the glab skill's comment
+  rules and its toolkit; the toolkit enforces glab's comment conventions on
+  every write (glab §9, §22). This skill keeps no comment convention of its
+  own.
+- An own thread is a discussion whose first non-system note the toolkit's
+  own-thread filter recognizes as a watcher comment under the glab skill's
+  comment rule. The selection is mechanical: `mr-threads.sh --ai-only` (and
   `mr-verify-posted.sh --ai-only` after publishing).
 - Others' threads — human or bot — are never answered, resolved, or modified
   by the watcher. The watcher's write scope is its own threads, the approve
@@ -241,9 +242,8 @@ instructed by the supervisor:
 - Mandatory elements, checked before every launch:
   1. the first line `Worktree: <worktree-path>`;
   2. a reference to the glab skill;
-  3. the explicit prefix norm — every posted body starts with `[ai] `;
-  4. the resume section (the section 4 rules);
-  5. the hard constraints: no merging, closing, or renaming of the MR; no
+  3. the resume section (the section 4 rules);
+  4. the hard constraints: no merging, closing, or renaming of the MR; no
      answering others' threads; no posting without anchor validation.
 
 ## 13. Stopping the system: the three-part stop
