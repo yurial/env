@@ -169,6 +169,7 @@ else:
         print(f"== {full} =={draft} updated {updated} by {author}")
         print(f"   title: {m.get('title') or ''}")
         print(f"   url:   {m.get('web_url') or ''}")
+        print(f"   branches: {m.get('source_branch') or '?'} -> {m.get('target_branch') or '?'}")
     if mrs:
         print(f"-- {len(mrs)} merge request(s): {descr()}")
 PY

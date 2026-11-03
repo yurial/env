@@ -153,8 +153,9 @@ own MRs (SKILL.md section 5) — the tool encapsulates that trap.
 Pagination: `per_page=100` + `--paginate` via `lib.sh`.
 
 - text output: one block per MR — `references.full` and a `[DRAFT]` mark,
-  `updated_at` date, `author.username` on the header line, then `title` and
-  `web_url`; sorted by `updated_at` descending; a trailing count line
+  `updated_at` date, `author.username` on the header line, then `title`,
+  `web_url`, and the branch line `source_branch -> target_branch`; sorted
+  by `updated_at` descending; a trailing count line
   summarizes the query;
 - `--draft` / `--no-draft` filter drafts (`work_in_progress` or a
   `Draft:`/`WIP:` title prefix);
@@ -162,8 +163,10 @@ Pagination: `per_page=100` + `--paginate` via `lib.sh`.
   project path of `references.full` — the global endpoint returns no
   `project` object; default: all accessible projects);
 - `--max N` caps the list after sorting (newest updates first);
-- `--json` prints the same normalized set as a JSON array, sorted
-  identically, deduplicated by MR id (the count line goes to stderr).
+- `--json` prints the same normalized set as a JSON array of the
+  endpoint's MR objects — `source_branch` and `target_branch` included —
+  sorted identically, deduplicated by MR id (the count line goes to
+  stderr).
 
 GET-only: no writes, no clone needed. Exit codes: 0 success (an empty
 result is a success printed as an informational line), 1 failure (API
@@ -188,7 +191,9 @@ The MR card — the mechanical "view one MR" step of the watcher loop (raw
 `glab mr view` remains the interactive project-scoped path). Fields, from
 the single-MR endpoint plus the approvals endpoint: title with a `[DRAFT]`
 mark, state, `work_in_progress`, author, reviewers, `approved_by`
-(usernames, the approvals endpoint), `blocking_discussions_resolved`,
+(usernames, the approvals endpoint), `approved` (boolean) and
+`approvals_required` (number or null; `?` in the text card when absent) —
+both from the approvals endpoint too — `blocking_discussions_resolved`,
 `detailed_merge_status` and the legacy `merge_status`, source and target
 branches, the recovered head sha with its provenance (the masked-sha
 ladder: commits-endpoint id -> `short_id` resolved locally -> git
@@ -710,3 +715,19 @@ afterwards) drove the write-path prefix refusals and the
 `mr-threads.sh`, and `mr-verify-posted.sh`; `--repo <dir>` was validated
 (exit 2 on a nonexistent directory) in all twelve scripts that accept it.
 No comment, draft, reply, resolve, or publish was posted.
+
+The 2026-11-03 card/list round (MR !2039, read-only): `mr-card.sh` (text
+and `--json`, with a clone) printed the new approvals-endpoint fields —
+`approved: false (approvals_required: 1)` in the text card,
+`"approved": false` / `"approvals_required": 1` in the JSON — alongside
+the existing `approved_by`, both branches, and the recovered head
+172675b1e9bc5549597b5c12c4fc34a59a9cdd64 with provenance `commits
+endpoint` (the sha masking is flaky per request: in the same session some
+`/commits` and single-MR responses arrived fully masked with
+`__SECRET_N__` placeholders — the ladder recovered the head anyway);
+`mr-list.sh --role reviewer --state opened` printed the new
+`source_branch -> target_branch` line in every block (12 MRs, !2039
+among them), and `--json` carried both branch fields in every item (the
+normalized array keeps the endpoint objects as returned); `mr-diff.sh`
+ran the default diff and `--conflicts` (clean verdict, exit 0, consistent
+with the card's `merge_status: can_be_merged`).

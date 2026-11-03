@@ -63,7 +63,11 @@ worktree before acting on them.
 
 Thread lifecycle — your own threads only:
 
-- Problem fixed in the current diff → post a short confirmation, then resolve.
+- Problem fixed in the current diff → post a short confirmation, then
+  resolve — but only after the fix is pushed to the MR branch (a new
+  commit/head sha since you opened the thread); until the push lands,
+  keep the thread open, at most marking it with a short "waiting for the
+  push" reply.
 - Author replied with a justification → verify it in the code: correct → post
   agreement citing the verified facts (`<path>:<line>`), then resolve;
   wrong → post an objection with the contradicting facts, keep the thread

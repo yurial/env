@@ -683,10 +683,10 @@ the gitlab-tools topic of SPEC.md is normative for this section. Exit codes:
 One line per script:
 
 - `mr-auth-probe.sh [host]` — live token-health probe (the mechanical form of the section 15 rule): exactly one GET `user` through the shared error-detection machinery; exit 0 prints exactly `ok <username>`, exit 1 reports the host + HTTP code (or network error) on stderr, exit 2 usage. GET-only, no clone, no state, no token values read or echoed.
-- `mr-list.sh [--role reviewer|author|assignee] [--state opened|closed|merged|all] [--draft|--no-draft] [--json] [--project <group/proj>] [--max N] [--repo <dir>]` — global MR list by role for the current user across all accessible projects (default `--role reviewer --state opened`, the "what awaits my review" scenario); the mandatory `scope=all` (section 5) and full pagination are built in; one block per MR (`references.full`, DRAFT mark, title, author, updated_at date, web_url), newest update first; `--json` prints the normalized array; GET-only, an empty result is a success.
+- `mr-list.sh [--role reviewer|author|assignee] [--state opened|closed|merged|all] [--draft|--no-draft] [--json] [--project <group/proj>] [--max N] [--repo <dir>]` — global MR list by role for the current user across all accessible projects (default `--role reviewer --state opened`, the "what awaits my review" scenario); the mandatory `scope=all` (section 5) and full pagination are built in; one block per MR (`references.full`, DRAFT mark, title, author, updated_at date, web_url, source/target branches), newest update first; `--json` prints the normalized array; GET-only, an empty result is a success.
 - `mr-updates.sh <project> <iid> [--since <iso8601|sha>] [--state <file>] [--fetch] [--repo <dir>]` — MR state, new commits (diffstat inside a clone), new notes, thread status changes, and a `== merge status ==` section (detailed/legacy status transitions, the `blocking_discussions_resolved` flip, approvals +username/-username diffs) printed only when the delta changes them; with `--state` only the delta since the marker (additive schema, a masked sha is never stored as a cutoff).
 - `mr-has-updates.sh <project> <iid> [--state <file>] [--no-ci] [--repo <dir>]` — fast boolean "any updates on this MR?" check for timers (read-only, GET-only, no clone needed): compares commits, notes (system ones included), thread resolve flips and new discussions, MR state/draft, title/description hashes, reviewers/approvals, merge status (incl. `blocking_discussions_resolved`), and the head-sha CI pipeline against a has-updates marker; `--no-ci` excludes the CI category (no pipelines GET, no CI line, the marker keeps its saved pipeline values — the delta is not lost); exit 0 — updates present (one summary line per category on stdout), 1 — none (the first run records a baseline and prints `baseline recorded (...)`), 2 — usage error, 3 — API failure (the marker is left untouched so the delta is not lost).
-- `mr-card.sh <project> <iid> [--json] [--full] [--repo <dir>]` — the MR card: title + DRAFT mark, state, branches, author/reviewers/approvals, `blocking_discussions_resolved`, merge statuses, the recovered head sha with its provenance, `changes_count`, the truncated description, and the local diffstat `<merge-base>..<head>`; `--json` prints one normalized object; without a clone the card still prints, without the diffstat, with a NOTE on stderr.
+- `mr-card.sh <project> <iid> [--json] [--full] [--repo <dir>]` — the MR card: title + DRAFT mark, state, branches, author/reviewers/approvals (`approved_by` usernames, `approved`, `approvals_required` — the approvals endpoint), `blocking_discussions_resolved`, merge statuses, the recovered head sha with its provenance, `changes_count`, the truncated description, and the local diffstat `<merge-base>..<head>`; `--json` prints one normalized object; without a clone the card still prints, without the diffstat, with a NOTE on stderr.
 - `mr-diff.sh <project> <iid> [--files|--stat|--hunks|--conflicts] [--repo <dir>]` — the true local MR diff, always `<merge-base>..<head>` (never `diff_refs.start_sha`, never a two-dot against the moved target); `--files`/`--stat`/`--hunks` (the shared hunk-range construction the anchor validators use), `--conflicts` — a write-free local merge simulation: exit 0 clean / 1 conflicts (paths on stdout) / 3 could not be performed; requires a clone; degrades loudly to the local source-branch tip when the clone lacks the MR head.
 - `mr-threads.sh <project> <iid> [--open|--all] [--ai-only] [--no-system] [--max-chars N] [--full] [--repo <dir>]` — readable thread dump: discussion id, resolved state, anchor, authors, bodies; `--no-system` drops CI-bot system notes (system-only threads are not printed); GET-only.
 - `mr-comment.sh <project> <iid> <path> <line> <body-or-@file> [--old-side] [--no-prefix] [--force] [--dry-run] [--repo <dir>]` — one line-anchored comment: sha recovery, local hunk validation (refuses outside hunks with the valid ranges; `--force` posts unpositioned with `path:line` prepended), POST verified by GET.
@@ -732,6 +732,16 @@ project (masked shas and collapsed `/diffs` are worked around locally);
 without one, `mr-comment.sh` degrades to an unpositioned post and says so;
 `mr-diff.sh` requires a clone outright.
 
+Instance-dependent (observed live on GitLab 18.8.x-ee): `diff_refs` may
+arrive masked (`__SECRET_N__` placeholders) while the top-level `sha`
+field of the single-MR response and the `/commits` endpoint still return
+real shas (the masking is flaky per request — the same endpoint answers
+masked and unmasked on different calls). Trust the head-sha recovery
+ladder of `mr-card.sh` — its provenance line names the source that won
+(e.g. "commits endpoint") — and take conflict verdicts from
+`mr-diff.sh --conflicts` or a local `git merge-tree --write-tree`, not
+from the masked fields.
+
 Timer/watcher recipe (the has-updates gate). To watch an MR on a schedule,
 make `mr-has-updates.sh` the gate command of any scheduler that fires when
 its gate command exits `0`:
@@ -759,6 +769,44 @@ the clone the woken agent will use for diff/anchor work. A watcher that
 does not care about CI events passes `--no-ci`: the CI pipeline is not
 requested, no CI line appears, and the marker keeps its saved pipeline
 values so a CI change during the window is caught by the next full check.
+
+Watcher-round recipe (the step → tool map). One fire of the gate above is
+one review round; each step of the round maps to exactly one tool
+(contracts in `tools/README.md`; the comment prefix of section 9 applies
+to every posted body):
+
+- gate/wakeup — `mr-has-updates.sh` (the recipe above; its stdout summary
+  lines name the changed categories);
+- the MR card and the approve-state inputs (state, draft, reviewers,
+  approvals, merge statuses, the head) — `mr-card.sh`;
+- threads — `mr-threads.sh --all --no-system` (the resume read; own
+  threads via `--ai-only`);
+- conflicts — `mr-diff.sh --conflicts` (the local `git merge-tree`
+  verdict, never the API merge status alone);
+- new findings — `mr-draft-review.sh` (a batch, anchors pre-validated) or
+  `mr-comment.sh` (single);
+- replies into threads (confirmations, agreements, objections) —
+  `mr-reply.sh`;
+- resolve — `mr-resolve.sh`, exactly one thread per call, only after the
+  verdict is posted inside the thread;
+- post-verification of what actually landed — `mr-verify-posted.sh`
+  (`--expect` / `--drafts` / `--max-note-id`).
+
+Raw glab stays the path for the round operations outside the map —
+`glab mr approve`/`glab mr unapprove` (the approve policy itself is the
+caller's, e.g. the approve invariant of the glab-autoreview skill), CI
+status and retries (section 21), and everything else the toolkit does not
+cover.
+
+Push gate for confirming outgoing review threads (reviewer-side triage,
+the mirror of the author-side resolve discipline of section 18): the
+confirming comment and the resolve of one of your own threads are posted
+only after the author has pushed the fix into the MR branch — a new
+commit/head sha has appeared since the thread was opened (the card's head
+with its provenance; the gate's `commits:` line). Until the push lands
+the thread stays open; a short "waiting for the push" reply may mark it,
+without resolving — without a push there is no code change to verify,
+only the comment being marked fixed.
 
 End-to-end walkthrough: reviewing an MR with the toolkit — the typical
 reviewer loop as one sequence (contracts live in `tools/README.md` and the

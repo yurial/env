@@ -143,6 +143,10 @@ self-contained; return after completed steps — section 11):
 7. Return the round summary: findings posted, threads opened/closed/resolved,
    approve action taken, open blockers remaining.
 
+The step → tool map of the round's mechanical operations is the
+watcher-round recipe of glab §22; this section fixes the order and the
+policy, that one the tool per step.
+
 ## 6. Thread ownership
 
 - Every body the watcher posts — findings, replies, confirmations,
@@ -201,6 +205,14 @@ For every open own thread, exactly one of three outcomes per round:
   the thread. Wrong → post an objection with the contradicting facts
   (`<path>:<line>`), keep the thread open.
 - Not yet addressed → the thread stays open; re-check on the next round.
+
+Push gate for the fixed outcome: the confirmation and the resolve happen
+only after the author has pushed the fix into the MR branch — a new
+commit/head sha has appeared since the thread was opened (the round's MR
+card names the head). An author's "fixed" claim without the push does not
+verify: keep the thread open, at most marking it with a short "waiting
+for the push" reply, and re-check on the next round (the same gate is
+stated with the watcher-round recipe in glab §22).
 
 Resolve only after the verdict is posted inside the thread, one thread per
 resolve call (`mr-resolve.sh`; no batch resolve — glab §22). Never discuss
