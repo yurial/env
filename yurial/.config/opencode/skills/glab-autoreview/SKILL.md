@@ -144,8 +144,8 @@ self-contained; return after completed steps — section 11):
    approve action taken, open blockers remaining.
 
 The step → tool map of the round's mechanical operations is the
-watcher-round recipe of glab §22; this section fixes the order and the
-policy, that one the tool per step.
+watcher-round recipe of glab §22; this section fixes the round order and
+policy, and the map in that section assigns a tool to every step.
 
 ## 6. Thread ownership
 
