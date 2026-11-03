@@ -1,6 +1,6 @@
 ---
 name: glab-autoreview
-description: "Use when the user asks for continuous automated review of GitLab merge requests where the user is the reviewer: a standing hourly supervisor on the main agent (gate command mr-list.sh --role reviewer --state opened --project <group/project>, registry comparison in ~/tmp/mr-watch/registry.md, watcher launches under a slot limit with a pending-launch queue, completion control for closed/merged MRs), one watcher subagent (assistant_high) per MR with its own 15-minute scheduler and dedicated worktree (~/wt/<repo>/mr-<iid>, branch mr-<iid> from origin/main, passed as the first Worktree: line), restart-safe review rounds (every run resumes by reading all MR discussions from GitLab with pagination; open own threads are never re-posted or duplicated — matching is by file and topic), line-anchored comments only after anchor validation against diff hunks with the unpositioned <path>:<line> fallback, the approve invariant (approve present iff no unresolved blocking problems; unapprove when new blockers appear; non-blocking remarks never cancel an approve), own-thread lifecycle (confirm and resolve fixed threads, agree and resolve justified author replies verified in code, contest wrong replies with facts, never touch others' threads including bots), watcher completion on closed/merged MRs (scheduler removed, approve settled, final summary), anti-blocking discipline (publish validated findings immediately, publish subagent findings as a follow-up, return a result after each completed step), the three-part stop (abort sessions, remove the supervisor scheduler, tell watchers to remove theirs), and traps: stale merge_status vs the local merge-tree check, legal duplicate watcher sessions arbitrated by the registry, project-path 404 resolved via search?scope=projects, glab api exiting 0 on HTTP errors. Builds on the glab skill (gitlab-tools, comment protocols, scope=all, draft review flow) for all underlying mechanics. Use ONLY for continuous GitLab MR review with monitoring, not for one-off reviews without monitoring, other GitLab work, or other forges."
+description: "Use when the user asks for continuous automated review of GitLab merge requests where the user is the reviewer: a standing hourly supervisor on the main agent (gate command mr-list.sh --role reviewer --state opened --project <group/project>, registry comparison in ~/tmp/mr-watch/registry.md, watcher launches under a slot limit with a pending-launch queue, completion control for closed/merged MRs), one watcher subagent (assistant_high) per MR with its own 15-minute scheduler and dedicated worktree (~/wt/<repo>/mr-<iid>, branch mr-<iid> at the head of the MR source branch, passed as the first Worktree: line), restart-safe review rounds (every run resumes by reading all MR discussions from GitLab with pagination; open own threads are never re-posted or duplicated — matching is by file and topic), line-anchored comments only after anchor validation against diff hunks with the unpositioned <path>:<line> fallback, the approve invariant (approve present iff no unresolved blocking problems; unapprove when new blockers appear; non-blocking remarks never cancel an approve), own-thread lifecycle (confirm and resolve fixed threads, agree and resolve justified author replies verified in code, contest wrong replies with facts, never touch others' threads including bots), watcher completion on closed/merged MRs (scheduler removed, approve settled, final summary), anti-blocking discipline (publish validated findings immediately, publish subagent findings as a follow-up, return a result after each completed step), the three-part stop (abort sessions, remove the supervisor scheduler, tell watchers to remove theirs), and traps: stale merge_status vs the local merge-tree check, legal duplicate watcher sessions arbitrated by the registry, project-path 404 resolved via search?scope=projects, glab api exiting 0 on HTTP errors. Builds on the glab skill (gitlab-tools, comment protocols, scope=all, draft review flow) for all underlying mechanics. Use ONLY for continuous GitLab MR review with monitoring, not for one-off reviews without monitoring, other GitLab work, or other forges."
 ---
 
 # glab-autoreview: continuous automated MR review — supervisor, watchers, restart safety
@@ -21,7 +21,8 @@ glab sections instead of restating them. Observations marked
 instance-dependent were made live on a self-managed reference instance (the
 one configured as `GITLAB_HOST` in glab `tools/config.sh`) and are not
 guaranteed on other instances. Every identifier in examples is a placeholder:
-`<group/project>`, `<iid>`, `<repo>`, `<path>`, `<worktree-path>`.
+`<group/project>`, `<iid>`, `<repo>`, `<path>`, `<worktree-path>`,
+`<source-branch>`, `<head-sha>`.
 
 ## 1. Relationship to the glab skill
 
@@ -53,9 +54,14 @@ Supervisor (the main agent):
   never loses the delta).
 - On every fire, compare the fresh list against the registry (section 3):
   - An MR absent from the registry: prepare the watcher worktree
-    `~/wt/<repo>/mr-<iid>` (branch `mr-<iid>` from `origin/main`), add a
-    registry entry in state `pending-launch`, and launch the watcher as soon
-    as a slot is free.
+    `~/wt/<repo>/mr-<iid>` — `git fetch origin <source-branch>`, then
+    `git worktree add -b mr-<iid> ~/wt/<repo>/mr-<iid> <head-sha>`, with
+    `<source-branch>` from the listing (`mr-list.sh --json`, field
+    `source_branch`) and `<head-sha>` from the MR card or the same listing:
+    the branch is created at the head of the MR source branch, not at
+    `origin/main`, which lacks the MR code — the watcher's diffs and anchors
+    are computed against the MR head. Then add a registry entry in state
+    `pending-launch`, and launch the watcher as soon as a slot is free.
   - A registry entry in state `watching` whose MR is no longer opened:
     confirm the terminal state (closed or merged) with an MR card check
     (`mr-card.sh`), instruct its watcher to complete (section 10), mark the
