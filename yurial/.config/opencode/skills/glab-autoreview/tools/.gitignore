@@ -1,0 +1,2 @@
+# runtime state (default marker dir of mr-watch-delta.sh)
+.state/

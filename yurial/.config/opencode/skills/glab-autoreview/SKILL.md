@@ -1,6 +1,6 @@
 ---
 name: glab-autoreview
-description: "Use when the user asks for continuous automated review of GitLab merge requests where the user is the reviewer: a standing hourly supervisor on the main agent (gate command mr-list.sh --role reviewer --state opened --project <group/project>, registry comparison in ~/tmp/mr-watch/registry.md, watcher launches under a slot limit with a pending-launch queue, completion control for closed/merged MRs), one watcher subagent (assistant_high) per MR with its own 15-minute scheduler and dedicated worktree (~/wt/<repo>/mr-<iid>, branch mr-<iid> at the head of the MR source branch, passed as the first Worktree: line), restart-safe review rounds (every run resumes by reading all MR discussions from GitLab with pagination; open own threads are never re-posted or duplicated — matching is by file and topic), line-anchored comments only after anchor validation against diff hunks with the unpositioned <path>:<line> fallback, the approve invariant (approve present iff no unresolved blocking problems; unapprove when new blockers appear; non-blocking remarks never cancel an approve), own-thread lifecycle (confirm and resolve fixed threads, agree and resolve justified author replies verified in code, contest wrong replies with facts, never touch others' threads including bots), watcher completion on closed/merged MRs (scheduler removed, approve settled, final summary), anti-blocking discipline (publish validated findings immediately, publish subagent findings as a follow-up, return a result after each completed step), the three-part stop (abort sessions, remove the supervisor scheduler, tell watchers to remove theirs), and traps: stale merge_status vs the local merge-tree check, legal duplicate watcher sessions arbitrated by the registry, project-path 404 resolved via search?scope=projects, glab api exiting 0 on HTTP errors. Builds on the glab skill (gitlab-tools, comment protocols, scope=all, draft review flow) for all underlying mechanics. Use ONLY for continuous GitLab MR review with monitoring, not for one-off reviews without monitoring, other GitLab work, or other forges."
+description: "Use when the user asks for continuous automated review of GitLab merge requests where the user is the reviewer: a standing hourly supervisor on the main agent (gate command mr-watch-delta.sh: the reviewer listing through mr-list.sh compared against the registry — fires only on NEW/GONE MRs or a 12h heartbeat reification, never on an API failure; registry at ~/tmp/mr-watch/registry.md, watcher launches under a slot limit with a pending-launch queue, completion control for closed/merged MRs), one watcher subagent (assistant_high) per MR with its own 15-minute scheduler and dedicated worktree (~/wt/<repo>/mr-<iid>, branch mr-<iid> at the head of the MR source branch, passed as the first Worktree: line), restart-safe review rounds (every run resumes by reading all MR discussions from GitLab with pagination; open own threads are never re-posted or duplicated — matching is by file and topic), line-anchored comments only after anchor validation against diff hunks with the unpositioned <path>:<line> fallback, the approve invariant (approve present iff no unresolved blocking problems; unapprove when new blockers appear; non-blocking remarks never cancel an approve), own-thread lifecycle (confirm and resolve fixed threads, agree and resolve justified author replies verified in code, contest wrong replies with facts, never touch others' threads including bots), watcher completion on closed/merged MRs (scheduler removed, approve settled, final summary), anti-blocking discipline (publish validated findings immediately, publish subagent findings as a follow-up, return a result after each completed step), the three-part stop (abort sessions, remove the supervisor scheduler, tell watchers to remove theirs), and traps: stale merge_status vs the local merge-tree check, legal duplicate watcher sessions arbitrated by the registry, project-path 404 resolved via search?scope=projects, glab api exiting 0 on HTTP errors. Builds on the glab skill (gitlab-tools, comment protocols, scope=all, draft review flow) for all underlying mechanics. Use ONLY for continuous GitLab MR review with monitoring, not for one-off reviews without monitoring, other GitLab work, or other forges."
 ---
 
 # glab-autoreview: continuous automated MR review — supervisor, watchers, restart safety
@@ -45,25 +45,45 @@ guaranteed on other instances. Every identifier in examples is a placeholder:
 
 Supervisor (the main agent):
 
-- Holds an hourly scheduler. Its gate command prints the fresh list of MRs
-  awaiting the user's review in the project:
-  `mr-list.sh --role reviewer --state opened --project <group/project>`
-  (scope=all and pagination are built into the tool — glab §5, §22). Gate
-  exit `0` → the fire happens; a nonzero gate skips the fire and retries on
-  the next tick (the timer/watcher discipline of glab §22 — an API failure
-  never loses the delta).
-- On every fire, compare the fresh list against the registry (section 3):
-  - An MR absent from the registry: prepare the watcher worktree
+- Holds an hourly scheduler. Its gate command is the skill's own
+  `tools/mr-watch-delta.sh --project <group/project>`: it runs the fresh
+  reviewer listing through glab tools `mr-list.sh --role reviewer --state
+  opened --json` (scope=all and pagination built in — glab §5, §22),
+  compares it against the registry (section 3), and exits `0` — the fire
+  happens — only on a real delta or the heartbeat:
+  - NEW — an open MR represented in no registry section (an entry in any
+    section, drafts parked in closed/archived included, keeps the MR known
+    and silent);
+  - GONE — a watched MR (watching section, `pending-launch`/`watching`)
+    no longer in the open listing;
+  - HEARTBEAT — no delta for the force interval (default 12h; a missing
+    marker counts as never fired): the periodic reification of a
+    consistent-looking world.
+  A missing or empty registry is bootstrap: every open MR is NEW. The fire
+  stdout is the wakeup payload: the delta block (one line per trigger,
+  HEARTBEAT only when it fires alone) followed by the compact listing —
+  one line per MR — and the count line; the gate's state marker (the epoch
+  of the last fire) is updated on every fire. Everything else skips the
+  fire and retries on the next tick: no delta (one stderr line with the
+  watching/opened counts and the next heartbeat), or a listing failure —
+  an mr-list error, unparsable JSON, or an empty listing while the
+  registry has watchers (a project typo or a partial answer must not look
+  like a mass closure). An API failure never fires and never loses the
+  delta (the timer/watcher discipline of glab §22).
+- On every fire, act on the printed delta against the registry (section 3):
+  - A NEW MR: prepare the watcher worktree
     `~/wt/<repo>/mr-<iid>` — `git fetch origin <source-branch>`, then
     `git worktree add -b mr-<iid> ~/wt/<repo>/mr-<iid> <head-sha>`, with
-    `<source-branch>` from the listing (`mr-list.sh --json`, field
-    `source_branch`) and `<head-sha>` from the MR card or the same listing:
-    the branch is created at the head of the MR source branch, not at
-    `origin/main`, which lacks the MR code — the watcher's diffs and anchors
-    are computed against the MR head. Then add a registry entry in state
-    `pending-launch`, and launch the watcher as soon as a slot is free.
-  - A registry entry in state `watching` whose MR is no longer opened:
-    confirm the terminal state (closed or merged) with an MR card check
+    `<source-branch>` from the gate's listing line (the compact line
+    carries `source -> target`; `mr-list.sh --json`, field
+    `source_branch`, remains the full-field form) and `<head-sha>` from
+    the MR card: the branch is created at the head of the MR source
+    branch, not at `origin/main`, which lacks the MR code — the watcher's
+    diffs and anchors are computed against the MR head. Then add a
+    registry entry in state `pending-launch`, and launch the watcher as
+    soon as a slot is free.
+  - A GONE registry entry (state `watching` or `pending-launch`): confirm
+    the terminal state (closed or merged) with an MR card check
     (`mr-card.sh`), instruct its watcher to complete (section 10), mark the
     entry `done`.
 - Slot limit: at most four watchers run concurrently (`watcher-slot-limit`,
