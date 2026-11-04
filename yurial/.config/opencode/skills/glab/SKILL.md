@@ -1,7 +1,36 @@
 ---
 name: glab
-description: "Use when working with GitLab from the command line via glab (GitLab CLI): listing, viewing, creating, checking out, approving, and merging merge requests (MRs), writing MR descriptions (Russian description, English commit message), reading and posting MR comments (line-anchored comments), batch posting of review comments, line-anchor validation against diff hunks, review comments via draft review (draft notes, publish all at once), discussion replies via GraphQL fallback, thread resolution state, processing incoming review comments as the MR author (individual comment workflow, resolve discipline), filtering MRs by role (reviewer, assignee, author), draft/WIP MRs, managing issues, checking CI/CD pipelines and jobs, and calling the GitLab REST API via `glab api` (fields, bodies, pagination, URL-encoded paths), preferring the bundled gitlab-tools scripts (tools/ next to this skill) as the mechanical path for MR update polling with state markers (merge status included), the fast boolean has-updates timer check and the timer/watcher gate scenario over it, a live token-health probe, the MR card, the true local MR diff (file/stat/hunk/conflict modes), thread dumps, single line-anchored comments, batch draft review with safe publish, discussion replies, single-thread resolve, and read-only post-publish verification of posted comments: draft count, max note id, body/anchor verification. Covers glab-specific traps: repository context, scope=all, iid vs id, pagination, flag collisions, HTTP 401/403/404 disambiguation, non-interactive usage. Use ONLY for glab/GitLab CLI operations, not for plain git workflows or other forges."
+description: "Use when working with GitLab from the command line via glab. The bundled `tools/` scripts (gitlab-tools, next to this skill) are the REQUIRED mechanical path — use them first for MR update polling with state markers (merge status included), the fast boolean has-updates timer check and the timer/watcher gate scenario over it, a live token-health probe, global role-based MR listing (reviewer/assignee/author across all projects), the MR card, the true local MR diff (file/stat/hunk/conflict modes), thread dumps, single line-anchored comments, batch draft review with safe publish, discussion replies, single-thread resolve, and read-only post-publish verification of posted comments (draft count, max note id, body/anchor verification); reach for `glab api` directly ONLY for operations outside that set (fields, bodies, pagination, URL-encoded paths). Beyond the tools, the skill covers listing, viewing, creating, checking out, approving, and merging merge requests (MRs), writing MR descriptions (Russian description, English commit message), reading and posting MR comments (line-anchored comments), batch posting of review comments, line-anchor validation against diff hunks, review comments via draft review (draft notes, publish all at once), discussion replies via GraphQL fallback, thread resolution state, processing incoming review comments as the MR author (individual comment workflow, resolve discipline), filtering MRs by role (reviewer, assignee, author), draft/WIP MRs, managing issues, checking CI/CD pipelines and jobs. Covers glab-specific traps: repository context, scope=all, iid vs id, pagination, flag collisions, HTTP 401/403/404 disambiguation, non-interactive usage. Use ONLY for glab/GitLab CLI operations, not for plain git workflows or other forges."
 ---
+
+## Tool-first rule (mechanical path)
+
+The bundled `tools/` scripts are the REQUIRED mechanical path for every
+operation they cover. Before writing ANY `glab api` call, pipeline, or
+ad-hoc script for an MR/GitLab operation, check the mapping below — the
+tools already encode the instance traps (pagination, sha masking,
+rc=0-on-error, comment prefix, anchor validation).
+
+| operation | script |
+|---|---|
+| has anything changed (commits/notes/threads/state/CI) | `mr-has-updates.sh` |
+| state + delta of commits/notes/threads since a marker | `mr-updates.sh --state` |
+| thread dump: open/resolved, authors, bodies, ids | `mr-threads.sh --open\|--all` |
+| true local MR diff / files / hunks / conflicts | `mr-diff.sh` |
+| MR card (state, approvals, head sha) | `mr-card.sh` |
+| line-anchored comment | `mr-comment.sh` |
+| reply into an existing thread | `mr-reply.sh` |
+| resolve / unresolve one thread | `mr-resolve.sh` |
+| batch review / verdict plan / post-publish verification | `mr-draft-review.sh` / `mr-verify-report.sh` / `mr-verify-posted.sh` |
+| global role-based MR listing (reviewer/author/assignee) | `mr-list.sh` |
+| token health | `mr-auth-probe.sh` |
+
+Full contracts (arguments, exit codes, guards) are in `tools/README.md`;
+one line per script is in section 22.
+
+Hand-built `glab api` calls are allowed ONLY for operations this table
+does not cover. A "my need is just a simple GET" is not an exception —
+the first ad-hoc script is how the hand-rolled pipeline starts.
 
 # glab: GitLab CLI — typical workflows and traps
 
@@ -19,7 +48,8 @@ issues, and CI/CD pipelines and jobs. Alongside these manual protocols the
 skill carries the gitlab-tools toolkit (section 22) — bash+python3 scripts
 in `tools/` next to this file that implement the review workflows
 mechanically — including the read-only post-publish verifier
-`mr-verify-posted.sh` — and are the preferred path for their operations.
+`mr-verify-posted.sh` — and are the required path for their operations
+(the Tool-first rule above).
 Verified against glab 1.36.0; behavior marked instance-dependent was
 observed live on a self-managed GitLab (18.7.7-ee at first, 18.8.11-ee by
 2026-10) and is not guaranteed on other instances. On another glab version
@@ -696,18 +726,18 @@ One line per script:
 - `mr-verify-report.sh <project> <iid> <verdicts.json> [--emit <out.json>] [--post] [--yes] [--repo <dir>]` — verdict plan (acknowledge/contest located by a thread hint, `new` anchored items): the full plan is printed before any write; `--emit` writes a batch for `mr-draft-review.sh`; posting requires `--yes`; it never publishes.
 - `mr-verify-posted.sh <project> <iid> [--expect <expected.json>] [--drafts] [--max-note-id] [--ai-only] [--max-chars N] [--full] [--repo <dir>]` — READ-ONLY post-publish verification (use it instead of ad-hoc inline scripts): pending-draft count (`--drafts`), highest note id on the MR (`--max-note-id`, the follow-up baseline), and `--expect` matching of posted bodies (the comments.json schema of `mr-draft-review.sh`; byte-exact FINAL bodies; anchored items also require `new_path`/`new_line` — or `old_path`/`old_line` — equality; reply items require the body inside the given discussion; `@file` bodies; `--ai-only` narrows to notes with the configured comment prefix); verdicts `ok`/`anchor-mismatch`/`body-mismatch`/`not-found` with discussion id, note id, anchor, and resolved flag; exit 1 when any expected item is not ok, 2 usage error.
 
-When to prefer the tools: use them instead of hand-built glab calls for
-exactly these operations — a global role-based MR listing (reviewer/author/
-assignee across all projects), update polling with a state marker, a
-boolean "any updates?" check for timers (and the timer/watcher gate
-scenario below), a live token-health probe, the MR card, the true local MR
-diff (files/stat/hunks/conflicts), thread dumps, a single anchored comment,
-a batch review, a discussion reply, a single-thread resolve, and read-only
-post-publish verification (pending-draft count, max note id,
-expected-body/anchor checks). Raw glab stays the path for everything else
-(MR/issue/CI operations, project-scoped lists, descriptions, merges) and for
-understanding the underlying API semantics: the tools automate the
-protocols above, they do not replace the knowledge behind them.
+When to prefer the tools: always — the Tool-first table at the top of
+this skill (before section 1) is the routing rule. Any operation in that
+table goes through the bundled script, never through a hand-built glab
+call; raw glab stays the path only for operations outside the table
+(MR/issue/CI operations, project-scoped lists, descriptions, merges) and
+for understanding the underlying API semantics: the tools automate the
+protocols above, they do not replace the knowledge behind them. The
+open-thread picture — the counter and the list of open (unresolved)
+threads, each with its resolved state computed over its resolvable notes,
+not just a dump of bodies — is `mr-threads.sh --open`: the trailing count
+line is the open-thread counter, and `--ai-only` narrows the dump to
+threads carrying the configured comment prefix.
 
 Configuration: optional `tools/config.sh` fills site defaults only when the
 environment has not set the variable — precedence
