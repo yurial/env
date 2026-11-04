@@ -87,7 +87,9 @@ Describe algorithm contracts with steps, invariants, and complexity estimates at
 - Define local terms exactly in `Definitions` or `GLOSSARY.md`; use common or defined terms in normative wording.
 - Every non-trivial example mirrors the ID of the requirement it explains.
 
-Prefixed entry families belong only in their corresponding sections: `R` in `Requirements`, `I` in `Implementation`, `E` in `Examples`, `T` in `Tests`, `J` in `Justification`, and `V` in `Verification`. Every non-empty content line in these sections begins in column zero with `- ` followed by its corresponding ID. Each prefixed entry occupies exactly one line; do not use Markdown nesting to express hierarchy. Each leaf `T-ID` names the checked `R-ID` or IDs, a concrete procedure, conditions or inputs, and expected-result criteria.
+Prefixed entry families belong only in their corresponding sections: `R` in `Requirements`, `I` in `Implementation`, `E` in `Examples`, `T` in `Tests`, `J` in `Justification`, and `V` in `Verification`. Every non-empty content line in these sections begins in column zero with `- ` followed by its corresponding ID. Each prefixed entry occupies exactly one line; do not use Markdown nesting to express hierarchy. Each leaf `T-ID` names the checked requirement or requirements in `R-ID=`, the test body's reproducible step-by-step recipe in `procedure=`, the given inputs or environment in `conditions=`, and the observable success criterion in `expected=`. The `procedure=` field specifies the ordered setup, actions, and checks from which the test body is subsequently written; it is not an invocation, a command for launching tests, or a list of existing test names.
+
+For example, incorrect: `procedure=run ArityTest and CurryingTest`. Correct: `procedure=bind a recording target with two bound arguments using Bind; invoke the resulting callback with one runtime argument; assert that the target received the bound arguments followed by the runtime argument in the original order; assert that the callback returned the target's result`.
 
 Every leaf `R-ID` marked `automated` or `scenario` must be covered by at least one `T-ID`. A separate `T-ID` is not required for `manual` or `analysis`. Missing required test coverage is a blocking finding. Each `Verification` entry applies to a precisely named algorithm and must not claim complete correctness based only on a limited TLC run.
 
@@ -103,7 +105,7 @@ Each `Configuration` entry is keyed by name and specifies its type and effect. F
 - When a project uses a `specs/` tree, add each new term to `GLOSSARY.md` in the same change as the spec.
 - Give each full term ID exactly one definition. Store `GLOSSARY.md` as a Markdown table with columns `Term ID`, `Definition`, `Defined in` in that order, one data row per term; sort rows strictly alphabetically by full term ID.
 - Each glossary entry includes `Defined in`, equal to the term's `Reference` prefix and, where necessary, requirement IDs.
-- Reuse an owned term by citing its full ID without changing the prefix or defining it again. List its owner spec in `Dependencies`.
+- Reuse an owned term by citing its full ID without changing the prefix or defining terms again. List its owner spec in `Dependencies`.
 - Refer to another spec by its `Reference`, not its file path.
 - Every `Dependencies` relationship must have a semantic basis and a mirrored `Used by` entry. Update both sides together and remove both sides when the relationship no longer applies.
 - Write spec prose in the project's language. The first spec uses the user's language; do not mix languages within one file. In non-English prose, avoid undocumented anglicisms except full term IDs, identifiers and code literals, CLI verbs, and configuration keys.
